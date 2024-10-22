@@ -1,8 +1,35 @@
-/* Additional custom styles if needed */
+/* Custom styles */
 .card {
     margin-bottom: 1.5rem;
 }
 
 .table {
     margin-bottom: 0;
+}
+
+/* Bin type indicators */
+.bin-refuse {
+    border-left: 4px solid var(--bs-danger);
+}
+
+.bin-recycling {
+    border-left: 4px solid var(--bs-success);
+}
+
+/* Form validation styles */
+.is-invalid {
+    border-color: var(--bs-danger);
+}
+
+.next-collection-preview {
+    font-size: 0.9rem;
+}
+
+/* Card header colors */
+.card:has(input[value="refuse"]) .card-header {
+    background-color: rgba(var(--bs-danger-rgb), 0.1);
+}
+
+.card:has(input[value="recycling"]) .card-header {
+    background-color: rgba(var(--bs-success-rgb), 0.1);
 }
