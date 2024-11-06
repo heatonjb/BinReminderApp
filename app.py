@@ -3,15 +3,19 @@ import re
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_mail import Mail, Message
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
+from apscheduler.schedulers.background import BackgroundScheduler
 
 class Base(DeclarativeBase):
     pass
 
 db = SQLAlchemy(model_class=Base)
 login_manager = LoginManager()
+mail = Mail()
+scheduler = BackgroundScheduler()
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or "a secret key"
@@ -21,8 +25,17 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
 }
 
+# Mail configuration
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
+
 db.init_app(app)
 login_manager.init_app(app)
+mail.init_app(app)
 login_manager.login_view = 'login'
 
 with app.app_context():
@@ -41,6 +54,51 @@ def validate_date(date_str):
         return date >= datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     except ValueError:
         return False
+
+def send_collection_reminder(user_email, bin_type, collection_date):
+    with app.app_context():
+        msg = Message(
+            subject=f'Bin Collection Reminder: {bin_type.title()} Collection Tomorrow',
+            recipients=[user_email],
+            body=f'''Dear Resident,
+
+This is a reminder that your {bin_type} bin collection is scheduled for tomorrow, {collection_date.strftime('%A, %B %d, %Y')}.
+
+Please ensure your bin is placed outside before the collection time.
+
+Best regards,
+Your Bin Collection Reminder Service'''
+        )
+        mail.send(msg)
+
+def check_upcoming_collections():
+    with app.app_context():
+        tomorrow = datetime.now().date() + timedelta(days=1)
+        schedules = BinSchedule.query.join(User).filter(
+            BinSchedule.next_collection.between(
+                tomorrow,
+                tomorrow + timedelta(days=1)
+            )
+        ).all()
+
+        for schedule in schedules:
+            send_collection_reminder(
+                schedule.user.email,
+                schedule.bin_type,
+                schedule.next_collection
+            )
+            
+            # Update next collection date based on frequency
+            if schedule.frequency == 'weekly':
+                schedule.next_collection += timedelta(days=7)
+            else:  # biweekly
+                schedule.next_collection += timedelta(days=14)
+        
+        db.session.commit()
+
+# Start the scheduler
+scheduler.add_job(check_upcoming_collections, 'cron', hour=16)  # Run daily at 4 PM
+scheduler.start()
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -135,3 +193,6 @@ def update_schedule():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)

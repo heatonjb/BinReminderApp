@@ -10,4 +10,6 @@ dependencies = [
     "psycopg2-binary>=2.9.10",
     "twilio>=9.3.4",
     "flask-login>=0.6.3",
+    "flask-mail>=0.10.0",
+    "apscheduler>=3.10.4",
 ]
