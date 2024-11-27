@@ -65,8 +65,14 @@ def toggle_admin(user_id):
 @app.route('/admin/reminders')
 @admin_required
 def admin_reminders():
+    from datetime import datetime, timedelta
+    today = datetime.now().date()
+    tomorrow = today + timedelta(days=1)
     schedules = BinSchedule.query.join(User).all()
-    return render_template('admin/reminders.html', schedules=schedules)
+    return render_template('admin/reminders.html', 
+                         schedules=schedules,
+                         today=today,
+                         tomorrow=tomorrow)
 
 @app.route('/admin/emails')
 @admin_required
