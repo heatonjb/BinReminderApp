@@ -303,6 +303,15 @@ def update_schedule():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+@app.route('/make_admin')
+@login_required
+def make_admin():
+    if current_user.email == User.query.order_by(User.id.asc()).first().email:  # Check if this is the first user
+        current_user.is_admin = True
+        db.session.commit()
+        flash('Admin privileges granted')
+    return redirect(url_for('dashboard'))
+
 # Import admin routes
 import admin_routes
 
