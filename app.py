@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from flask_mail import Mail, Message
+from sms_notifications import send_sms_reminder, send_test_sms
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -119,11 +120,18 @@ def check_upcoming_collections():
             logger.info(f"Found {len(schedules)} collections scheduled for tomorrow")
 
             for schedule in schedules:
-                if send_collection_reminder(
+                email_sent = send_collection_reminder(
                     schedule.user.email,
                     schedule.bin_type,
                     schedule.next_collection
-                ):
+                )
+                sms_sent = send_sms_reminder(
+                    schedule.user.phone,
+                    schedule.bin_type,
+                    schedule.next_collection
+                )
+                
+                if email_sent or sms_sent:
                     # Update next collection date based on frequency
                     if schedule.frequency == 'weekly':
                         schedule.next_collection += timedelta(days=7)
@@ -163,6 +171,16 @@ def test_email():
         flash('Test email sent successfully! Please check your inbox.')
     else:
         flash('Failed to send test email. Please check the server logs.')
+    return redirect(url_for('dashboard'))
+
+@app.route('/test-sms')
+@login_required
+def test_sms():
+    """Route to test SMS functionality."""
+    if send_test_sms(current_user.phone):
+        flash('Test SMS sent successfully! Please check your phone.')
+    else:
+        flash('Failed to send test SMS. Please check the server logs.')
     return redirect(url_for('dashboard'))
 
 @app.route('/login', methods=['GET', 'POST'])
