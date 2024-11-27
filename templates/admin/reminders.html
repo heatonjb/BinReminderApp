@@ -1,0 +1,40 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1>Bin Collection Schedules</h1>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Bin Type</th>
+                <th>Frequency</th>
+                <th>Next Collection</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for schedule in schedules %}
+            <tr>
+                <td>{{ schedule.user.email }}</td>
+                <td>{{ schedule.bin_type|title }}</td>
+                <td>{{ schedule.frequency|title }}</td>
+                <td>{{ schedule.next_collection.strftime('%Y-%m-%d') }}</td>
+                <td>
+                    {% if schedule.next_collection.date() == tomorrow %}
+                        <span class="badge bg-warning">Tomorrow</span>
+                    {% elif schedule.next_collection.date() < today %}
+                        <span class="badge bg-danger">Overdue</span>
+                    {% else %}
+                        <span class="badge bg-success">Scheduled</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

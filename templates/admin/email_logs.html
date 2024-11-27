@@ -1,0 +1,36 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1>Email Logs</h1>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Recipient</th>
+                <th>Bin Type</th>
+                <th>Status</th>
+                <th>Error Message</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.sent_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                <td>{{ log.recipient_email }}</td>
+                <td>{{ log.bin_type|title }}</td>
+                <td>
+                    <span class="badge bg-{{ 'success' if log.status == 'success' else 'danger' }}">
+                        {{ log.status|title }}
+                    </span>
+                </td>
+                <td>{{ log.error_message if log.error_message else '-' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

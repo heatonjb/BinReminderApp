@@ -6,6 +6,7 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
 from sms_notifications import send_sms_reminder, send_test_sms
+from decorators import admin_required
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -302,6 +303,8 @@ def update_schedule():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+# Import admin routes
+import admin_routes
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
