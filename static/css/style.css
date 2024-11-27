@@ -54,11 +54,13 @@
 }
 
 .fc-event.bin-refuse {
-    background-color: var(--bs-danger);
+    background-color: var(--bs-danger) !important;
+    border-color: var(--bs-danger) !important;
 }
 
 .fc-event.bin-recycling {
-    background-color: var(--bs-success);
+    background-color: var(--bs-success) !important;
+    border-color: var(--bs-success) !important;
 }
 
 .fc-button {
