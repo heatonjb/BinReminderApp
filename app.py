@@ -2,7 +2,7 @@ import os
 import re
 from flask import Flask, render_template, request, redirect, url_for, flash
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
 from sms_notifications import send_sms_reminder, send_test_sms
@@ -50,7 +50,7 @@ with app.app_context():
     import models
     db.create_all()
 
-from models import User, BinSchedule
+from models import User, BinSchedule, EmailLog #Added EmailLog import
 
 def validate_phone(phone):
     phone = re.sub(r'[-\s()]', '', phone)
@@ -160,6 +160,12 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 @app.route('/')
+def index():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('login'))
+
+@app.route('/dashboard')
 @login_required
 def dashboard():
     schedules = BinSchedule.query.filter_by(user_id=current_user.id).all()
@@ -167,13 +173,41 @@ def dashboard():
 
 @app.route('/test-email')
 @login_required
-def test_email():
+def test_email_route(): #Renamed to avoid conflict
     """Route to test email functionality."""
     if send_test_email(current_user.email):
         flash('Test email sent successfully! Please check your inbox.')
     else:
         flash('Failed to send test email. Please check the server logs.')
     return redirect(url_for('dashboard'))
+
+@app.route('/calendar')
+@login_required
+def calendar_view():
+    schedules = BinSchedule.query.filter_by(user_id=current_user.id).all()
+    events = []
+    
+    for schedule in schedules:
+        # Calculate all collections for the next 3 months
+        current_date = schedule.next_collection
+        end_date = datetime.now() + timedelta(days=90)
+        
+        while current_date <= end_date:
+            events.append({
+                'title': f"{schedule.bin_type.title()} Collection",
+                'start': current_date.strftime('%Y-%m-%d'),
+                'binType': schedule.bin_type,
+                'allDay': True
+            })
+            
+            # Add next collection based on frequency
+            if schedule.frequency == 'weekly':
+                current_date += timedelta(days=7)
+            else:  # biweekly
+                current_date += timedelta(days=14)
+    
+    return render_template('calendar.html', events=events)
+
 
 @app.route('/test-sms')
 @login_required
@@ -191,7 +225,7 @@ def login():
         email = request.form.get('email')
         password = request.form.get('password')
         user = User.query.filter_by(email=email).first()
-        if user and check_password_hash(user.password_hash, password):
+        if user and check_password_hash(user.password_hash, password): #Using original password checking method
             login_user(user)
             return redirect(url_for('dashboard'))
         flash('Invalid email or password')

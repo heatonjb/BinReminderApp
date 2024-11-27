@@ -33,3 +33,44 @@
 .card:has(input[value="recycling"]) .card-header {
     background-color: rgba(var(--bs-success-rgb), 0.1);
 }
+
+/* Calendar styles */
+#calendar {
+    background-color: var(--bs-body-bg);
+    color: var(--bs-body-color);
+}
+
+.fc-theme-standard td, .fc-theme-standard th {
+    border-color: var(--bs-border-color);
+}
+
+.fc-day-today {
+    background-color: var(--bs-secondary-bg) !important;
+}
+
+.fc-event {
+    border: none;
+    padding: 2px;
+}
+
+.fc-event.bin-refuse {
+    background-color: var(--bs-danger);
+}
+
+.fc-event.bin-recycling {
+    background-color: var(--bs-success);
+}
+
+.fc-button {
+    background-color: var(--bs-secondary) !important;
+    border-color: var(--bs-secondary) !important;
+}
+
+.fc-button:hover {
+    background-color: var(--bs-secondary-dark) !important;
+}
+
+.fc-button-active {
+    background-color: var(--bs-primary) !important;
+    border-color: var(--bs-primary) !important;
+}

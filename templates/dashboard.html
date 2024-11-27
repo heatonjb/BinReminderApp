@@ -6,6 +6,7 @@
         <div class="d-flex justify-content-between align-items-center">
             <h2>Welcome, {{ current_user.email }}</h2>
             <div>
+                <a href="{{ url_for('calendar_view') }}" class="btn btn-primary me-2">View Calendar</a>
                 <a href="{{ url_for('test_email') }}" class="btn btn-info me-2">Send Test Email</a>
                 <a href="{{ url_for('test_sms') }}" class="btn btn-info">Send Test SMS</a>
             </div>
