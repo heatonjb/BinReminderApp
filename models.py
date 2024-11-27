@@ -20,7 +20,7 @@ class User(UserMixin, db.Model):
 class BinSchedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    bin_type = db.Column(db.String(20), nullable=False)  # 'refuse' or 'recycling'
+    bin_type = db.Column(db.String(20), nullable=False)  # 'refuse', 'recycling', or 'garden_waste'
     frequency = db.Column(db.String(20), nullable=False)  # 'weekly' or 'biweekly'
     next_collection = db.Column(db.DateTime, nullable=False)
 

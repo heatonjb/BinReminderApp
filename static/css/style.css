@@ -62,6 +62,11 @@
     background-color: var(--bs-success) !important;
     border-color: var(--bs-success) !important;
 }
+.fc-event.bin-garden_waste {
+    background-color: var(--bs-warning) !important;
+    border-color: var(--bs-warning) !important;
+}
+
 
 .fc-button {
     background-color: var(--bs-secondary) !important;
