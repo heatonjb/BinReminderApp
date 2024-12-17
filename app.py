@@ -160,8 +160,13 @@ def check_upcoming_collections():
         except Exception as e:
             logger.error(f"Error in check_upcoming_collections: {str(e)}")
 
-# Start the scheduler
-scheduler.add_job(check_upcoming_collections, 'cron', hour=16)  # Run daily at 4 PM
+# Start the scheduler with a specific job ID
+scheduler.add_job(
+    check_upcoming_collections,
+    'cron',
+    hour=16,
+    id='check_upcoming_collections'
+)  # Run daily at 4 PM
 scheduler.start()
 logger.info("Email notification scheduler started - will run daily at 4 PM")
 
@@ -329,14 +334,27 @@ def update_notification_preferences():
     current_user.notification_time = notification_time
     db.session.commit()
     
-    # Update the scheduler job to run at the new time
-    scheduler.reschedule_job(
-        'check_upcoming_collections',
-        trigger='cron',
-        hour=notification_time
-    )
+    try:
+        # Remove existing job if it exists
+        try:
+            scheduler.remove_job('check_upcoming_collections')
+        except:
+            pass
+        
+        # Add new job with updated time
+        scheduler.add_job(
+            check_upcoming_collections,
+            'cron',
+            hour=notification_time,
+            id='check_upcoming_collections'
+        )
+        
+        logger.info(f"Notification schedule updated to run at {notification_time}:00")
+        flash('Notification preferences updated successfully')
+    except Exception as e:
+        logger.error(f"Error updating notification schedule: {str(e)}")
+        flash('Notification preferences saved, but schedule update failed')
     
-    flash('Notification preferences updated successfully')
     return redirect(url_for('dashboard'))
 
 @app.route('/logout')
