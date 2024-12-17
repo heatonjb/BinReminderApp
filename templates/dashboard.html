@@ -86,6 +86,37 @@
             </div>
         </div>
     </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3>Notification Preferences</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_notification_preferences') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Notification Type</label>
+                        <select name="notification_type" class="form-select">
+                            <option value="both" {% if current_user.notification_type == 'both' %}selected{% endif %}>Email and SMS</option>
+                            <option value="email" {% if current_user.notification_type == 'email' %}selected{% endif %}>Email Only</option>
+                            <option value="sms" {% if current_user.notification_type == 'sms' %}selected{% endif %}>SMS Only</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notification Time</label>
+                        <select name="notification_time" class="form-select">
+                            {% for hour in range(0, 24) %}
+                            <option value="{{ hour }}" {% if current_user.notification_time == hour %}selected{% endif %}>
+                                {{ '%02d:00'|format(hour) }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Preferences</button>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="row">

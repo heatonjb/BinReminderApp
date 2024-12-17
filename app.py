@@ -123,18 +123,27 @@ def check_upcoming_collections():
             logger.info(f"Found {len(schedules)} collections scheduled for tomorrow")
 
             for schedule in schedules:
-                email_sent = send_collection_reminder(
-                    schedule.user.email,
-                    schedule.bin_type,
-                    schedule.next_collection
-                )
-                sms_sent = send_sms_reminder(
-                    schedule.user.phone,
-                    schedule.bin_type,
-                    schedule.next_collection
-                )
+                notification_sent = False
                 
-                if email_sent or sms_sent:
+                # Send email if user wants email notifications
+                if schedule.user.notification_type in ['email', 'both']:
+                    email_sent = send_collection_reminder(
+                        schedule.user.email,
+                        schedule.bin_type,
+                        schedule.next_collection
+                    )
+                    notification_sent = notification_sent or email_sent
+                
+                # Send SMS if user wants SMS notifications
+                if schedule.user.notification_type in ['sms', 'both']:
+                    sms_sent = send_sms_reminder(
+                        schedule.user.phone,
+                        schedule.bin_type,
+                        schedule.next_collection
+                    )
+                    notification_sent = notification_sent or sms_sent
+                
+                if notification_sent:
                     # Update next collection date based on frequency
                     if schedule.frequency == 'weekly':
                         schedule.next_collection += timedelta(days=7)
@@ -296,6 +305,38 @@ def update_schedule():
         db.session.rollback()
         flash('An error occurred while updating the schedule')
         
+    return redirect(url_for('dashboard'))
+
+@app.route('/notification-preferences', methods=['POST'])
+@login_required
+def update_notification_preferences():
+    notification_type = request.form.get('notification_type')
+    notification_time = request.form.get('notification_time')
+    
+    if notification_type not in ['email', 'sms', 'both']:
+        flash('Invalid notification type selected')
+        return redirect(url_for('dashboard'))
+    
+    try:
+        notification_time = int(notification_time)
+        if not (0 <= notification_time <= 23):
+            raise ValueError
+    except ValueError:
+        flash('Invalid notification time selected')
+        return redirect(url_for('dashboard'))
+    
+    current_user.notification_type = notification_type
+    current_user.notification_time = notification_time
+    db.session.commit()
+    
+    # Update the scheduler job to run at the new time
+    scheduler.reschedule_job(
+        'check_upcoming_collections',
+        trigger='cron',
+        hour=notification_time
+    )
+    
+    flash('Notification preferences updated successfully')
     return redirect(url_for('dashboard'))
 
 @app.route('/logout')

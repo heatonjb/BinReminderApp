@@ -10,6 +10,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256))
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     schedules = db.relationship('BinSchedule', backref='user', lazy=True)
+    notification_type = db.Column(db.String(10), default='both', nullable=False)  # 'email', 'sms', or 'both'
+    notification_time = db.Column(db.Integer, default=16, nullable=False)  # Hour of the day (0-23)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
