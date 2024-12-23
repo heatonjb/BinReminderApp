@@ -272,28 +272,26 @@ def login():
             password = request.form.get('password')
 
             if not email or not password:
-                logger.warning("Login attempt with missing credentials")
                 flash('Please provide both email and password')
                 return render_template('auth/login.html')
 
             user = User.query.filter_by(email=email).first()
 
             if not user:
-                logger.warning(f"Login attempt failed: No user found with email {email}")
                 flash('Invalid email or password')
                 return render_template('auth/login.html')
 
-            if user.check_password(password):
-                login_user(user)
-                logger.info(f"User {email} logged in successfully")
-                return redirect(url_for('dashboard'))
+            if not user.check_password(password):
+                flash('Invalid email or password')
+                return render_template('auth/login.html')
 
-            logger.warning(f"Login attempt failed: Invalid password for user {email}")
-            flash('Invalid email or password')
+            login_user(user)
+            return redirect(url_for('dashboard'))
+
         except Exception as e:
-            logger.error(f"Error during login: {str(e)}")
-            flash('An error occurred during login. Please try again.')
+            logger.error(f"Login error: {str(e)}")
             db.session.rollback()
+            flash('An error occurred. Please try again.')
 
     return render_template('auth/login.html')
 
@@ -377,55 +375,43 @@ def update_notification_preferences():
         notification_type = request.form.get('notification_type')
         notification_time = request.form.get('notification_time')
 
+        # Validate notification type
         if notification_type not in ['email', 'sms', 'both']:
-            logger.warning(f"Invalid notification type selected: {notification_type}")
             flash('Invalid notification type selected')
             return redirect(url_for('dashboard'))
 
+        # Validate notification time
         try:
             notification_time = int(notification_time)
             if not (0 <= notification_time <= 23):
-                raise ValueError("Time must be between 0 and 23")
-        except ValueError as e:
-            logger.warning(f"Invalid notification time selected: {notification_time}")
+                raise ValueError
+        except (ValueError, TypeError):
             flash('Invalid notification time selected')
             return redirect(url_for('dashboard'))
 
+        # Update user preferences
         current_user.notification_type = notification_type
         current_user.notification_time = notification_time
 
+        # Save to database
         db.session.commit()
-        logger.info(f"Updated notification preferences for user {current_user.email}")
 
         # Update scheduler
-        try:
-            # Remove existing job if it exists
-            try:
-                scheduler.remove_job('check_upcoming_collections')
-                logger.info("Removed existing notification job")
-            except Exception as e:
-                logger.warning(f"No existing job to remove: {str(e)}")
+        scheduler.remove_job('check_upcoming_collections')
+        scheduler.add_job(
+            check_upcoming_collections,
+            'cron',
+            hour=notification_time,
+            id='check_upcoming_collections'
+        )
 
-            # Add new job with updated time
-            scheduler.add_job(
-                check_upcoming_collections,
-                'cron',
-                hour=notification_time,
-                id='check_upcoming_collections'
-            )
-
-            logger.info(f"Notification schedule updated to run at {notification_time}:00")
-            flash('Notification preferences updated successfully')
-        except Exception as e:
-            logger.error(f"Error updating notification schedule: {str(e)}")
-            flash('Notification preferences saved, but schedule update failed')
-
+        flash('Notification preferences updated successfully')
         return redirect(url_for('dashboard'))
 
     except Exception as e:
-        logger.error(f"Unexpected error in update_notification_preferences: {str(e)}")
+        logger.error(f"Error updating notification preferences: {str(e)}")
         db.session.rollback()
-        flash('An unexpected error occurred')
+        flash('An error occurred while updating preferences')
         return redirect(url_for('dashboard'))
 
 @app.route('/logout')
