@@ -8,9 +8,11 @@ dependencies = [
     "flask>=3.0.3",
     "flask-sqlalchemy>=3.1.1",
     "psycopg2-binary>=2.9.10",
-    "twilio>=9.3.4",
     "flask-login>=0.6.3",
     "flask-mail>=0.10.0",
     "apscheduler>=3.10.4",
     "flask-migrate>=4.0.7",
+    "telnyx>=2.1.4",
+    "sqlalchemy>=2.0.36",
+    "werkzeug>=3.0.4",
 ]
