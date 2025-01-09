@@ -33,11 +33,12 @@ def upgrade():
         column('referral_code', sa.String)
     )
 
-    # Update existing users with default values
+    # Generate random referral codes for existing users
+    # Using a simpler approach with random hex string
     op.execute(
         user_table.update().values({
             'sms_credits': 6,  # Default 6 credits for existing users
-            'referral_code': sa.func.substr(sa.func.md5(sa.func.random()::text), 1, 8)  # Random 8-char code
+            'referral_code': sa.func.substr(sa.func.md5(sa.func.random()), 1, 8)
         })
     )
 
