@@ -35,7 +35,7 @@
                         <h4>Share & Earn</h4>
                         <div class="input-group mb-3">
                             <input type="text" class="form-control" id="referralUrl" 
-                                   value="https://{{ environ.REPLIT_SLUG }}.repl.co/register?ref={{ current_user.referral_code }}" 
+                                   value="https://{{ replit_slug }}.repl.co/register?ref={{ current_user.referral_code }}" 
                                    readonly>
                             <button class="btn btn-outline-secondary" type="button" onclick="copyReferralUrl()">
                                 Copy Link
@@ -199,6 +199,7 @@
             </div>
         </div>
     </div>
+
 </div>
 
 <div class="row">

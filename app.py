@@ -221,7 +221,8 @@ def index():
 @login_required
 def dashboard():
     schedules = BinSchedule.query.filter_by(user_id=current_user.id).all()
-    return render_template('dashboard.html', schedules=schedules)
+    replit_slug = os.environ.get('REPLIT_SLUG', '')
+    return render_template('dashboard.html', schedules=schedules, replit_slug=replit_slug)
 
 @app.route('/test-email')
 @login_required
