@@ -15,6 +15,9 @@
                 <th>ID</th>
                 <th>Email</th>
                 <th>Phone</th>
+                <th>SMS Credits</th>
+                <th>Referral Code</th>
+                <th>Referrals</th>
                 <th>Admin</th>
                 <th>Actions</th>
             </tr>
@@ -26,6 +29,14 @@
                 <td>{{ user.email }}</td>
                 <td>{{ user.phone }}</td>
                 <td>
+                    <form method="POST" action="{{ url_for('update_credits', user_id=user.id) }}" class="d-flex align-items-center">
+                        <input type="number" name="credits" value="{{ user.sms_credits }}" class="form-control form-control-sm w-25 me-2">
+                        <button type="submit" class="btn btn-sm btn-primary">Update</button>
+                    </form>
+                </td>
+                <td>{{ user.referral_code }}</td>
+                <td>{{ user.referrals|length }}</td>
+                <td>
                     <form method="POST" action="{{ url_for('toggle_admin', user_id=user.id) }}" class="d-inline">
                         <button type="submit" class="btn btn-sm btn-{{ 'success' if user.is_admin else 'secondary' }}">
                             {{ 'Admin' if user.is_admin else 'User' }}
@@ -33,9 +44,39 @@
                     </form>
                 </td>
                 <td>
-                    <button class="btn btn-sm btn-info">Edit</button>
+                    <button type="button" class="btn btn-sm btn-info" data-bs-toggle="modal" 
+                            data-bs-target="#referralsModal{{ user.id }}">
+                        View Referrals
+                    </button>
                 </td>
             </tr>
+
+            <!-- Referrals Modal -->
+            <div class="modal fade" id="referralsModal{{ user.id }}" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Referrals for {{ user.email }}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>Referral URL: https://{{ environ.REPLIT_SLUG }}.repl.co/register?ref={{ user.referral_code }}</p>
+                            <h6>Referred Users:</h6>
+                            {% if user.referrals %}
+                            <ul class="list-group">
+                                {% for referral in user.referrals %}
+                                <li class="list-group-item">
+                                    {{ referral.email }} (joined: {{ referral.created_at.strftime('%Y-%m-%d') }})
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% else %}
+                            <p class="text-muted">No referrals yet</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
             {% endfor %}
         </tbody>
     </table>
@@ -62,6 +103,10 @@
                     <div class="mb-3">
                         <label class="form-label">Password</label>
                         <input type="password" name="password" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Initial SMS Credits</label>
+                        <input type="number" name="sms_credits" class="form-control" value="6" required>
                     </div>
                     <div class="mb-3 form-check">
                         <input type="checkbox" name="is_admin" class="form-check-input" id="isAdmin">

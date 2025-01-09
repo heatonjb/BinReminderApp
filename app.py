@@ -308,6 +308,7 @@ def register():
             email = request.form.get('email')
             phone = request.form.get('phone')
             password = request.form.get('password')
+            referral_code = request.args.get('ref')  # Get referral code from URL
 
             if User.query.filter_by(email=email).first():
                 flash('Email already registered')
@@ -317,10 +318,40 @@ def register():
                 flash('Invalid phone number format. Please use a valid format (e.g., +1234567890)')
                 return redirect(url_for('register'))
 
-            user = User(email=email, phone=phone)
+            # Create new user with default 6 credits
+            user = User(email=email, phone=phone, sms_credits=6)
             user.set_password(password)
+
+            # Handle referral if present
+            if referral_code:
+                referrer = User.query.filter_by(referral_code=referral_code).first()
+                if referrer:
+                    user.referred_by_id = referrer.id
+                    user.sms_credits = 10  # Bonus credits for being referred
+                    referrer.sms_credits += 20  # Bonus credits for referrer
+                    logger.info(f"User {email} referred by {referrer.email}")
+
             db.session.add(user)
             db.session.commit()
+
+            # Send welcome email with referral link
+            welcome_email = Message(
+                'Welcome to Bin Collection Reminder Service',
+                recipients=[email],
+                body=f'''Welcome to the Bin Collection Reminder Service!
+
+Your account has been created successfully. You have {user.sms_credits} SMS credits to start with.
+
+Share your referral link with friends and earn more credits:
+https://{os.environ.get('REPLIT_SLUG')}.repl.co/register?ref={user.referral_code}
+
+- You'll get 20 SMS credits for each friend who signs up
+- Your friends will get 10 SMS credits to start (4 extra credits)
+
+Best regards,
+Your Bin Collection Reminder Service'''
+            )
+            mail.send(welcome_email)
 
             return redirect(url_for('login'))
         except Exception as e:
@@ -328,7 +359,7 @@ def register():
             flash('An error occurred during registration. Please try again.')
             db.session.rollback()
 
-    return render_template('auth/register.html')
+    return render_template('auth/register.html', referral_code=request.args.get('ref'))
 
 @app.route('/schedule/update', methods=['POST'])
 @login_required

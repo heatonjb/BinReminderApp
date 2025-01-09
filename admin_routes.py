@@ -17,6 +17,8 @@ def admin_dashboard():
         total_schedules = BinSchedule.query.count()
         total_emails = EmailLog.query.count()
         failed_emails = EmailLog.query.filter_by(status='failure').count()
+        total_credits = db.session.query(func.sum(User.sms_credits)).scalar() or 0
+        total_referrals = db.session.query(func.count(User.referred_by_id)).filter(User.referred_by_id.isnot(None)).scalar()
 
         # Get collection statistics for the past week
         week_ago = datetime.now() - timedelta(days=7)
@@ -29,6 +31,8 @@ def admin_dashboard():
                             total_schedules=total_schedules,
                             total_emails=total_emails,
                             failed_emails=failed_emails,
+                            total_credits=total_credits,
+                            total_referrals=total_referrals,
                             collections_this_week=collections_this_week)
     except Exception as e:
         logger.error(f"Error in admin dashboard: {str(e)}")
@@ -54,12 +58,13 @@ def create_user():
         phone = request.form.get('phone')
         password = request.form.get('password')
         is_admin = request.form.get('is_admin') == 'on'
+        sms_credits = int(request.form.get('sms_credits', 6))
 
         if User.query.filter_by(email=email).first():
             flash('Email already registered')
             return redirect(url_for('admin_users'))
 
-        user = User(email=email, phone=phone, is_admin=is_admin)
+        user = User(email=email, phone=phone, is_admin=is_admin, sms_credits=sms_credits)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
@@ -70,6 +75,29 @@ def create_user():
         logger.error(f"Error creating user: {str(e)}")
         db.session.rollback()
         flash('Error creating user')
+
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/users/<int:user_id>/update_credits', methods=['POST'])
+@admin_required
+def update_credits(user_id):
+    try:
+        user = User.query.get_or_404(user_id)
+        new_credits = int(request.form.get('credits', 0))
+
+        if new_credits < 0:
+            flash('Credits cannot be negative')
+            return redirect(url_for('admin_users'))
+
+        user.sms_credits = new_credits
+        db.session.commit()
+
+        logger.info(f"Updated SMS credits for user {user.email} to {new_credits}")
+        flash(f'SMS credits updated for {user.email}')
+    except Exception as e:
+        logger.error(f"Error updating SMS credits: {str(e)}")
+        db.session.rollback()
+        flash('Error updating SMS credits')
 
     return redirect(url_for('admin_users'))
 
