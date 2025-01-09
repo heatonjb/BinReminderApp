@@ -142,69 +142,75 @@ Your Bin Collection Reminder Service'''
         logger.error(f"Failed to send test email: {str(e)}")
         return False
 
-def check_upcoming_collections():
+def check_upcoming_collections(notification_time='evening'):
     """Check and send reminders for tomorrow's collections."""
     with app.app_context():
         try:
-            tomorrow = datetime.now().date() + timedelta(days=1)
+            if notification_time == 'evening':
+                # For evening notifications, check tomorrow's collections
+                target_date = datetime.now().date() + timedelta(days=1)
+            else:
+                # For morning notifications, check today's collections
+                target_date = datetime.now().date()
+
             schedules = BinSchedule.query.join(User).filter(
                 BinSchedule.next_collection.between(
-                    tomorrow,
-                    tomorrow + timedelta(days=1)
+                    target_date,
+                    target_date + timedelta(days=1)
                 )
             ).all()
 
-            logger.info(f"Found {len(schedules)} collections scheduled for tomorrow")
+            logger.info(f"Found {len(schedules)} collections scheduled for {'tomorrow' if notification_time == 'evening' else 'today'}")
 
             for schedule in schedules:
                 notification_sent = False
+                user = schedule.user
 
-                # Send email if user wants email notifications
-                if schedule.user.notification_type in ['email', 'both']:
-                    email_sent = send_collection_reminder(
-                        schedule.user.email,
-                        schedule.bin_type,
-                        schedule.next_collection
-                    )
-                    notification_sent = notification_sent or email_sent
+                # Determine which notification preferences to use
+                if notification_time == 'evening':
+                    should_notify = user.evening_notification
+                    notification_type = user.evening_notification_type
+                else:
+                    should_notify = user.morning_notification
+                    notification_type = user.morning_notification_type
 
-                # Send SMS if user wants SMS notifications
-                if schedule.user.notification_type in ['sms', 'both']:
-                    sms_sent = send_sms_reminder(
-                        schedule.user.phone,
-                        schedule.bin_type,
-                        schedule.next_collection
-                    )
-                    notification_sent = notification_sent or sms_sent
+                if should_notify:
+                    # Send email if configured
+                    if notification_type in ['email', 'both']:
+                        email_sent = send_collection_reminder(
+                            user.email,
+                            schedule.bin_type,
+                            schedule.next_collection
+                        )
+                        notification_sent = notification_sent or email_sent
 
-                if notification_sent:
-                    # Update next collection date based on frequency
-                    if schedule.frequency == 'weekly':
-                        schedule.next_collection += timedelta(days=7)
-                    else:  # biweekly
-                        schedule.next_collection += timedelta(days=14)
+                    # Send SMS if configured
+                    if notification_type in ['sms', 'both']:
+                        sms_sent = send_sms_reminder(
+                            user.phone,
+                            schedule.bin_type,
+                            schedule.next_collection
+                        )
+                        notification_sent = notification_sent or sms_sent
 
-                    try:
-                        db.session.commit()
-                        logger.info(f"Updated next collection date for user {schedule.user.email}")
-                    except Exception as e:
-                        db.session.rollback()
-                        logger.error(f"Failed to update next collection date: {str(e)}")
+                    if notification_sent and notification_time == 'evening':
+                        # Update next collection date based on frequency
+                        # Only update after evening notification
+                        if schedule.frequency == 'weekly':
+                            schedule.next_collection += timedelta(days=7)
+                        else:  # biweekly
+                            schedule.next_collection += timedelta(days=14)
+
+                        try:
+                            db.session.commit()
+                            logger.info(f"Updated next collection date for user {user.email}")
+                        except Exception as e:
+                            db.session.rollback()
+                            logger.error(f"Failed to update next collection date: {str(e)}")
 
         except Exception as e:
             logger.error(f"Error in check_upcoming_collections: {str(e)}")
 
-# Start the scheduler with default time (4 PM)
-scheduler.add_job(
-    check_upcoming_collections,
-    'cron',
-    hour=16,
-    id='check_upcoming_collections'
-)
-scheduler.start()
-logger.info("Email notification scheduler started - will run daily at 4 PM")
-
-# Routes
 @app.route('/')
 def index():
     if current_user.is_authenticated:
@@ -372,38 +378,77 @@ def update_schedule():
 @login_required
 def update_notification_preferences():
     try:
-        notification_type = request.form.get('notification_type')
-        notification_time = request.form.get('notification_time')
+        # Evening notification preferences
+        evening_notification = request.form.get('evening_notification') == 'on'
+        evening_notification_time = request.form.get('evening_notification_time')
+        evening_notification_type = request.form.get('evening_notification_type')
 
-        # Validate notification type
-        if notification_type not in ['email', 'sms', 'both']:
-            flash('Invalid notification type selected')
-            return redirect(url_for('dashboard'))
+        # Morning notification preferences
+        morning_notification = request.form.get('morning_notification') == 'on'
+        morning_notification_time = request.form.get('morning_notification_time')
+        morning_notification_type = request.form.get('morning_notification_type')
 
-        # Validate notification time
-        try:
-            notification_time = int(notification_time)
-            if not (0 <= notification_time <= 23):
-                raise ValueError
-        except (ValueError, TypeError):
-            flash('Invalid notification time selected')
-            return redirect(url_for('dashboard'))
+        # Validate evening notification settings
+        if evening_notification:
+            if evening_notification_type not in ['email', 'sms', 'both']:
+                flash('Invalid evening notification type selected')
+                return redirect(url_for('dashboard'))
+
+            try:
+                evening_notification_time = int(evening_notification_time)
+                if not (12 <= evening_notification_time <= 22):
+                    raise ValueError
+            except (ValueError, TypeError):
+                flash('Invalid evening notification time selected')
+                return redirect(url_for('dashboard'))
+
+        # Validate morning notification settings
+        if morning_notification:
+            if morning_notification_type not in ['email', 'sms', 'both']:
+                flash('Invalid morning notification type selected')
+                return redirect(url_for('dashboard'))
+
+            try:
+                morning_notification_time = int(morning_notification_time)
+                if not (5 <= morning_notification_time <= 11):
+                    raise ValueError
+            except (ValueError, TypeError):
+                flash('Invalid morning notification time selected')
+                return redirect(url_for('dashboard'))
 
         # Update user preferences
-        current_user.notification_type = notification_type
-        current_user.notification_time = notification_time
+        current_user.evening_notification = evening_notification
+        current_user.evening_notification_time = evening_notification_time
+        current_user.evening_notification_type = evening_notification_type
+        current_user.morning_notification = morning_notification
+        current_user.morning_notification_time = morning_notification_time
+        current_user.morning_notification_type = morning_notification_type
 
         # Save to database
         db.session.commit()
 
-        # Update scheduler
-        scheduler.remove_job('check_upcoming_collections')
-        scheduler.add_job(
-            check_upcoming_collections,
-            'cron',
-            hour=notification_time,
-            id='check_upcoming_collections'
-        )
+        # Update scheduler jobs
+        scheduler.remove_all_jobs()
+
+        # Add evening notification job if enabled
+        if evening_notification:
+            scheduler.add_job(
+                check_upcoming_collections,
+                'cron',
+                hour=evening_notification_time,
+                id='evening_notifications',
+                args=['evening']
+            )
+
+        # Add morning notification job if enabled
+        if morning_notification:
+            scheduler.add_job(
+                check_upcoming_collections,
+                'cron',
+                hour=morning_notification_time,
+                id='morning_notifications',
+                args=['morning']
+            )
 
         flash('Notification preferences updated successfully')
         return redirect(url_for('dashboard'))
@@ -434,4 +479,8 @@ with app.app_context():
     import admin_routes
 
 if __name__ == '__main__':
+    # Start the scheduler
+    scheduler.start()
+    logger.info("Notification scheduler started")
+
     app.run(host='0.0.0.0', port=5000)

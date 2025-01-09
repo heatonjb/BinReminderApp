@@ -13,6 +13,15 @@ class User(UserMixin, db.Model):
     notification_type = db.Column(db.String(10), default='both', nullable=False)  # 'email', 'sms', or 'both'
     notification_time = db.Column(db.Integer, default=16, nullable=False)  # Hour of the day (0-23)
 
+    # New notification preferences
+    evening_notification = db.Column(db.Boolean, default=True, nullable=False)
+    evening_notification_time = db.Column(db.Integer, default=18, nullable=False)  # 6:30 PM
+    evening_notification_type = db.Column(db.String(10), default='both', nullable=False)
+
+    morning_notification = db.Column(db.Boolean, default=True, nullable=False)
+    morning_notification_time = db.Column(db.Integer, default=7, nullable=False)  # 7:30 AM
+    morning_notification_type = db.Column(db.String(10), default='both', nullable=False)
+
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 

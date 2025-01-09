@@ -36,7 +36,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-6">
         <div class="card mb-4">
             <div class="card-header">
@@ -61,7 +61,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-6">
         <div class="card mb-4">
             <div class="card-header">
@@ -90,29 +90,72 @@
     <div class="col-md-6">
         <div class="card mb-4">
             <div class="card-header">
-                <h3>Notification Preferences</h3>
+                <h3>Evening Notification Preferences</h3>
+                <p class="text-muted mb-0">Notifications sent the evening before collection</p>
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('update_notification_preferences') }}">
-                    <div class="mb-3">
-                        <label class="form-label">Notification Type</label>
-                        <select name="notification_type" class="form-select">
-                            <option value="both" {% if current_user.notification_type == 'both' %}selected{% endif %}>Email and SMS</option>
-                            <option value="email" {% if current_user.notification_type == 'email' %}selected{% endif %}>Email Only</option>
-                            <option value="sms" {% if current_user.notification_type == 'sms' %}selected{% endif %}>SMS Only</option>
-                        </select>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="eveningNotification" 
+                               name="evening_notification" {% if current_user.evening_notification %}checked{% endif %}>
+                        <label class="form-check-label" for="eveningNotification">Enable Evening Notifications</label>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Notification Time</label>
-                        <select name="notification_time" class="form-select">
-                            {% for hour in range(0, 24) %}
-                            <option value="{{ hour }}" {% if current_user.notification_time == hour %}selected{% endif %}>
+                        <select name="evening_notification_time" class="form-select">
+                            {% for hour in range(12, 23) %}
+                            <option value="{{ hour }}" {% if current_user.evening_notification_time == hour %}selected{% endif %}>
                                 {{ '%02d:00'|format(hour) }}
                             </option>
                             {% endfor %}
                         </select>
                     </div>
-                    <button type="submit" class="btn btn-primary">Update Preferences</button>
+                    <div class="mb-3">
+                        <label class="form-label">Notification Type</label>
+                        <select name="evening_notification_type" class="form-select">
+                            <option value="both" {% if current_user.evening_notification_type == 'both' %}selected{% endif %}>Email and SMS</option>
+                            <option value="email" {% if current_user.evening_notification_type == 'email' %}selected{% endif %}>Email Only</option>
+                            <option value="sms" {% if current_user.evening_notification_type == 'sms' %}selected{% endif %}>SMS Only</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Evening Preferences</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3>Morning Notification Preferences</h3>
+                <p class="text-muted mb-0">Notifications sent on the morning of collection</p>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_notification_preferences') }}">
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="morningNotification" 
+                               name="morning_notification" {% if current_user.morning_notification %}checked{% endif %}>
+                        <label class="form-check-label" for="morningNotification">Enable Morning Notifications</label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notification Time</label>
+                        <select name="morning_notification_time" class="form-select">
+                            {% for hour in range(5, 12) %}
+                            <option value="{{ hour }}" {% if current_user.morning_notification_time == hour %}selected{% endif %}>
+                                {{ '%02d:00'|format(hour) }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notification Type</label>
+                        <select name="morning_notification_type" class="form-select">
+                            <option value="both" {% if current_user.morning_notification_type == 'both' %}selected{% endif %}>Email and SMS</option>
+                            <option value="email" {% if current_user.morning_notification_type == 'email' %}selected{% endif %}>Email Only</option>
+                            <option value="sms" {% if current_user.morning_notification_type == 'sms' %}selected{% endif %}>SMS Only</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Update Morning Preferences</button>
                 </form>
             </div>
         </div>
