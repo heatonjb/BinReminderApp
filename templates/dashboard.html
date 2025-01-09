@@ -12,6 +12,45 @@
             </div>
         </div>
     </div>
+
+    <!-- Credits and Referral Section -->
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h3>Referral Program & Credits</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h4>SMS Credits</h4>
+                        <p class="display-4">{{ current_user.sms_credits }}</p>
+                        <p class="text-muted">Used for SMS notifications</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h4>Your Referrals</h4>
+                        <p class="display-4">{{ current_user.referrals|length }}</p>
+                        <p class="text-muted">People you've invited</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h4>Share & Earn</h4>
+                        <div class="input-group mb-3">
+                            <input type="text" class="form-control" id="referralUrl" 
+                                   value="https://{{ environ.REPLIT_SLUG }}.repl.co/register?ref={{ current_user.referral_code }}" 
+                                   readonly>
+                            <button class="btn btn-outline-secondary" type="button" onclick="copyReferralUrl()">
+                                Copy Link
+                            </button>
+                        </div>
+                        <p class="text-muted">
+                            Share your link and get 20 SMS credits for each friend who signs up!<br>
+                            Your friends get 10 bonus credits too!
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="col-md-6">
         <div class="card mb-4">
             <div class="card-header">
@@ -193,4 +232,23 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyReferralUrl() {
+    var copyText = document.getElementById("referralUrl");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); /* For mobile devices */
+    document.execCommand("copy");
+
+    // Optional: Show feedback
+    var button = event.currentTarget;
+    var originalText = button.innerHTML;
+    button.innerHTML = "Copied!";
+    setTimeout(function() {
+        button.innerHTML = originalText;
+    }, 2000);
+}
+</script>
 {% endblock %}
