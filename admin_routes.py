@@ -5,6 +5,7 @@ from decorators import admin_required
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import logging
+import os  # Add this import
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,7 @@ def toggle_template(template_id):
 def admin_users():
     try:
         users = User.query.all()
-        return render_template('admin/users.html', users=users)
+        return render_template('admin/users.html', users=users, environ=os.environ)
     except Exception as e:
         logger.error(f"Error loading users: {str(e)}")
         flash('Error loading user data')
