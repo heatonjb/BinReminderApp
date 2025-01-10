@@ -48,7 +48,7 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
 
         logger.info(f"Attempting to send SMS to {to_phone_number}")
         message = telnyx_client.Message.create(
-            from_=os.environ.get("TELNYX_MESSAGING_PROFILE_ID"),
+            from_=os.environ.get("TELNYX_PHONE_NUMBER"),  # Changed from TELNYX_MESSAGING_PROFILE_ID to TELNYX_PHONE_NUMBER
             to=to_phone_number,
             text=message_text
         )
@@ -87,7 +87,7 @@ def send_test_sms(to_phone_number: str, user) -> bool:
 
         logger.info(f"Attempting to send test SMS to {to_phone_number}")
         message = telnyx_client.Message.create(
-            from_=os.environ.get("TELNYX_MESSAGING_PROFILE_ID"),
+            from_=os.environ.get("TELNYX_PHONE_NUMBER"),  # Changed from TELNYX_MESSAGING_PROFILE_ID to TELNYX_PHONE_NUMBER
             to=to_phone_number,
             text=message_text
         )
