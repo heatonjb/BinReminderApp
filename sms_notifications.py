@@ -3,8 +3,28 @@ import telnyx
 import logging
 from app import db
 from flask import url_for
+import re
 
 logger = logging.getLogger(__name__)
+
+def format_phone_number(phone_number: str) -> str:
+    """Format phone number to E.164 format (+[country code][number])."""
+    # Remove any non-digit characters
+    cleaned = re.sub(r'\D', '', phone_number)
+
+    # If number starts with '0', assume UK number and replace with +44
+    if cleaned.startswith('0'):
+        cleaned = '44' + cleaned[1:]
+
+    # If no country code (less than 11 digits), assume UK and add +44
+    if len(cleaned) <= 10:
+        cleaned = '44' + cleaned
+
+    # Add + prefix if not present
+    if not cleaned.startswith('+'):
+        cleaned = '+' + cleaned
+
+    return cleaned
 
 def get_telnyx_client():
     """Initialize Telnyx client with API key."""
@@ -35,6 +55,12 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
             logger.error("Failed to initialize Telnyx client")
             return False
 
+        # Format phone numbers
+        formatted_to_number = format_phone_number(to_phone_number)
+        source_number = format_phone_number(os.environ.get("TELNYX_PHONE_NUMBER", ""))
+
+        logger.info(f"Formatted numbers - From: {source_number}, To: {formatted_to_number}")
+
         # Create invite URL
         invite_url = url_for('register', ref=user.referral_code, _external=True)
 
@@ -46,10 +72,10 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
             f"Invite friends to get more SMS credits! Share your link: {invite_url}"
         )
 
-        logger.info(f"Attempting to send SMS to {to_phone_number}")
+        logger.info(f"Attempting to send SMS from {source_number} to {formatted_to_number}")
         message = telnyx_client.Message.create(
-            from_=os.environ.get("TELNYX_PHONE_NUMBER"),  # Changed from TELNYX_MESSAGING_PROFILE_ID to TELNYX_PHONE_NUMBER
-            to=to_phone_number,
+            from_=source_number,
+            to=formatted_to_number,
             text=message_text
         )
 
@@ -57,10 +83,13 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
         user.use_sms_credit()
         db.session.commit()
 
-        logger.info(f"Successfully sent SMS reminder to {to_phone_number} (ID: {message.id})")
+        logger.info(f"Successfully sent SMS reminder to {formatted_to_number} (ID: {message.id})")
         return True
     except Exception as e:
-        logger.error(f"Failed to send SMS reminder to {to_phone_number}: {str(e)}")
+        error_details = str(e)
+        if hasattr(e, 'errors'):
+            error_details = f"Full details: {e.errors}"
+        logger.error(f"Failed to send SMS reminder to {to_phone_number}: {error_details}")
         return False
 
 def send_test_sms(to_phone_number: str, user) -> bool:
@@ -76,6 +105,12 @@ def send_test_sms(to_phone_number: str, user) -> bool:
             logger.error("Failed to initialize Telnyx client")
             return False
 
+        # Format phone numbers
+        formatted_to_number = format_phone_number(to_phone_number)
+        source_number = format_phone_number(os.environ.get("TELNYX_PHONE_NUMBER", ""))
+
+        logger.info(f"Formatted numbers - From: {source_number}, To: {formatted_to_number}")
+
         # Create invite URL using Flask's url_for
         invite_url = url_for('register', ref=user.referral_code, _external=True)
 
@@ -85,10 +120,10 @@ def send_test_sms(to_phone_number: str, user) -> bool:
             f"Invite friends to get more SMS credits! Share your link: {invite_url}"
         )
 
-        logger.info(f"Attempting to send test SMS to {to_phone_number}")
+        logger.info(f"Attempting to send test SMS from {source_number} to {formatted_to_number}")
         message = telnyx_client.Message.create(
-            from_=os.environ.get("TELNYX_PHONE_NUMBER"),  # Changed from TELNYX_MESSAGING_PROFILE_ID to TELNYX_PHONE_NUMBER
-            to=to_phone_number,
+            from_=source_number,
+            to=formatted_to_number,
             text=message_text
         )
 
@@ -96,8 +131,11 @@ def send_test_sms(to_phone_number: str, user) -> bool:
         user.use_sms_credit()
         db.session.commit()
 
-        logger.info(f"Successfully sent test SMS to {to_phone_number} (ID: {message.id})")
+        logger.info(f"Successfully sent test SMS to {formatted_to_number} (ID: {message.id})")
         return True
     except Exception as e:
-        logger.error(f"Failed to send test SMS: {str(e)}")
+        error_details = str(e)
+        if hasattr(e, 'errors'):
+            error_details = f"Full details: {e.errors}"
+        logger.error(f"Failed to send test SMS: {error_details}")
         return False
