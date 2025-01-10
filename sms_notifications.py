@@ -4,6 +4,7 @@ import logging
 from app import db
 from flask import url_for
 import re
+from models import SMSTemplate
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,16 @@ def get_telnyx_client():
         logger.error(f"Failed to initialize Telnyx client: {str(e)}")
         return None
 
+def get_message_from_template(template_name, **kwargs):
+    """Get message text from a template."""
+    try:
+        template = SMSTemplate.query.filter_by(name=template_name, is_active=True).first()
+        if template:
+            return template.render(**kwargs)
+    except Exception as e:
+        logger.error(f"Error getting template '{template_name}': {str(e)}")
+    return None
+
 def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user) -> bool:
     """Send SMS reminder with error handling, logging, and credit check."""
     try:
@@ -64,13 +75,21 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
         # Create invite URL
         invite_url = url_for('register', ref=user.referral_code, _external=True)
 
-        # Compose message with referral information
-        message_text = (
-            f"Reminder: Your {bin_type} bin collection is scheduled for tomorrow, "
-            f"{collection_date.strftime('%A, %B %d, %Y')}. Please ensure your bin is "
-            f"placed outside before collection time.\n\n"
-            f"Invite friends to get more SMS credits! Share your link: {invite_url}"
+        # Get message from template or use default
+        message_text = get_message_from_template('collection_reminder', 
+            bin_type=bin_type,
+            collection_date=collection_date.strftime('%A, %B %d, %Y'),
+            invite_url=invite_url
         )
+
+        if not message_text:
+            # Fallback to default message if template not found
+            message_text = (
+                f"Reminder: Your {bin_type} bin collection is scheduled for tomorrow, "
+                f"{collection_date.strftime('%A, %B %d, %Y')}. Please ensure your bin is "
+                f"placed outside before collection time.\n\n"
+                f"Invite friends to get more SMS credits! Share your link: {invite_url}"
+            )
 
         logger.info(f"Attempting to send SMS from {source_number} to {formatted_to_number}")
         message = telnyx_client.Message.create(
@@ -114,11 +133,17 @@ def send_test_sms(to_phone_number: str, user) -> bool:
         # Create invite URL using Flask's url_for
         invite_url = url_for('register', ref=user.referral_code, _external=True)
 
-        message_text = (
-            "Test message from your Bin Collection Reminder Service. "
-            "SMS notifications are working correctly.\n\n"
-            f"Invite friends to get more SMS credits! Share your link: {invite_url}"
+        # Get message from template or use default
+        message_text = get_message_from_template('test_message',
+            invite_url=invite_url
         )
+
+        if not message_text:
+            message_text = (
+                "Test message from your Bin Collection Reminder Service. "
+                "SMS notifications are working correctly.\n\n"
+                f"Invite friends to get more SMS credits! Share your link: {invite_url}"
+            )
 
         logger.info(f"Attempting to send test SMS from {source_number} to {formatted_to_number}")
         message = telnyx_client.Message.create(

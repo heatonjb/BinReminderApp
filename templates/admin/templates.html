@@ -1,0 +1,121 @@
+{% extends "admin/admin_layout.html" %}
+
+{% block admin_content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1>SMS Templates</h1>
+    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createTemplateModal">
+        Create New Template
+    </button>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Template Text</th>
+                <th>Status</th>
+                <th>Last Updated</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for template in templates %}
+            <tr>
+                <td>{{ template.name }}</td>
+                <td>{{ template.description }}</td>
+                <td><pre class="mb-0"><code>{{ template.template_text }}</code></pre></td>
+                <td>
+                    <span class="badge bg-{{ 'success' if template.is_active else 'secondary' }}">
+                        {{ 'Active' if template.is_active else 'Inactive' }}
+                    </span>
+                </td>
+                <td>{{ template.updated_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                <td>
+                    <button class="btn btn-sm btn-primary" data-bs-toggle="modal" 
+                            data-bs-target="#editTemplateModal{{ template.id }}">
+                        Edit
+                    </button>
+                    <form method="POST" action="{{ url_for('admin.toggle_template', template_id=template.id) }}" class="d-inline">
+                        <button type="submit" class="btn btn-sm btn-{{ 'warning' if template.is_active else 'success' }}">
+                            {{ 'Deactivate' if template.is_active else 'Activate' }}
+                        </button>
+                    </form>
+                </td>
+            </tr>
+
+            <!-- Edit Template Modal -->
+            <div class="modal fade" id="editTemplateModal{{ template.id }}" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Edit Template</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form method="POST" action="{{ url_for('admin.update_template', template_id=template.id) }}">
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Template Name</label>
+                                    <input type="text" name="name" class="form-control" value="{{ template.name }}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Description</label>
+                                    <input type="text" name="description" class="form-control" value="{{ template.description }}">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Template Text</label>
+                                    <textarea name="template_text" class="form-control" rows="5" required>{{ template.template_text }}</textarea>
+                                    <small class="text-muted">
+                                        Available variables: {bin_type}, {collection_date}, {invite_url}
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="submit" class="btn btn-primary">Update Template</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Create Template Modal -->
+<div class="modal fade" id="createTemplateModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Create New Template</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('admin.create_template') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Template Name</label>
+                        <input type="text" name="name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" name="description" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Template Text</label>
+                        <textarea name="template_text" class="form-control" rows="5" required></textarea>
+                        <small class="text-muted">
+                            Available variables: {bin_type}, {collection_date}, {invite_url}
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Create Template</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

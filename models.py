@@ -3,6 +3,9 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import secrets
+import logging
+
+logger = logging.getLogger(__name__)
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -82,3 +85,27 @@ class EmailLog(db.Model):
     bin_type = db.Column(db.String(20), nullable=False)
     status = db.Column(db.String(10), nullable=False)  # 'success' or 'failure'
     error_message = db.Column(db.Text, nullable=True)
+
+
+class SMSTemplate(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    template_text = db.Column(db.Text, nullable=False)
+    description = db.Column(db.String(200))
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def render(self, **kwargs):
+        """
+        Render the template with provided variables.
+        Example: template.render(bin_type='recycling', collection_date='2025-01-11')
+        """
+        try:
+            return self.template_text.format(**kwargs)
+        except KeyError as e:
+            logger.error(f"Missing template variable: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Template rendering error: {str(e)}")
+            return None

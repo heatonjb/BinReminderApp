@@ -1,6 +1,6 @@
 from flask import render_template, redirect, url_for, request, flash
 from app import app, db
-from models import User, BinSchedule, EmailLog
+from models import User, BinSchedule, EmailLog, SMSTemplate
 from decorators import admin_required
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -38,6 +38,81 @@ def admin_dashboard():
         logger.error(f"Error in admin dashboard: {str(e)}")
         flash('Error loading dashboard data')
         return redirect(url_for('index'))
+
+@app.route('/admin/templates')
+@admin_required
+def admin_templates():
+    """View SMS templates."""
+    try:
+        templates = SMSTemplate.query.all()
+        return render_template('admin/templates.html', templates=templates)
+    except Exception as e:
+        logger.error(f"Error loading SMS templates: {str(e)}")
+        flash('Error loading templates')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/templates/create', methods=['POST'])
+@admin_required
+def create_template():
+    """Create a new SMS template."""
+    try:
+        name = request.form.get('name')
+        template_text = request.form.get('template_text')
+        description = request.form.get('description')
+
+        template = SMSTemplate(
+            name=name,
+            template_text=template_text,
+            description=description
+        )
+        db.session.add(template)
+        db.session.commit()
+
+        logger.info(f"Created new SMS template: {name}")
+        flash('Template created successfully')
+    except Exception as e:
+        logger.error(f"Error creating template: {str(e)}")
+        db.session.rollback()
+        flash('Error creating template')
+
+    return redirect(url_for('admin_templates'))
+
+@app.route('/admin/templates/<int:template_id>/update', methods=['POST'])
+@admin_required
+def update_template(template_id):
+    """Update an existing SMS template."""
+    try:
+        template = SMSTemplate.query.get_or_404(template_id)
+        template.name = request.form.get('name')
+        template.template_text = request.form.get('template_text')
+        template.description = request.form.get('description')
+
+        db.session.commit()
+        logger.info(f"Updated SMS template: {template.name}")
+        flash('Template updated successfully')
+    except Exception as e:
+        logger.error(f"Error updating template: {str(e)}")
+        db.session.rollback()
+        flash('Error updating template')
+
+    return redirect(url_for('admin_templates'))
+
+@app.route('/admin/templates/<int:template_id>/toggle', methods=['POST'])
+@admin_required
+def toggle_template(template_id):
+    """Toggle template active status."""
+    try:
+        template = SMSTemplate.query.get_or_404(template_id)
+        template.is_active = not template.is_active
+        db.session.commit()
+        logger.info(f"Toggled active status for template: {template.name}")
+        flash(f'Template {"activated" if template.is_active else "deactivated"} successfully')
+    except Exception as e:
+        logger.error(f"Error toggling template status: {str(e)}")
+        db.session.rollback()
+        flash('Error updating template status')
+
+    return redirect(url_for('admin_templates'))
 
 @app.route('/admin/users')
 @admin_required
