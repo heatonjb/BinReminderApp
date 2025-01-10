@@ -37,7 +37,7 @@
                             data-bs-target="#editTemplateModal{{ template.id }}">
                         Edit
                     </button>
-                    <form method="POST" action="{{ url_for('admin.toggle_template', template_id=template.id) }}" class="d-inline">
+                    <form method="POST" action="{{ url_for('toggle_template', template_id=template.id) }}" class="d-inline">
                         <button type="submit" class="btn btn-sm btn-{{ 'warning' if template.is_active else 'success' }}">
                             {{ 'Deactivate' if template.is_active else 'Activate' }}
                         </button>
@@ -53,7 +53,7 @@
                             <h5 class="modal-title">Edit Template</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                         </div>
-                        <form method="POST" action="{{ url_for('admin.update_template', template_id=template.id) }}">
+                        <form method="POST" action="{{ url_for('update_template', template_id=template.id) }}">
                             <div class="modal-body">
                                 <div class="mb-3">
                                     <label class="form-label">Template Name</label>
@@ -92,7 +92,7 @@
                 <h5 class="modal-title">Create New Template</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="{{ url_for('admin.create_template') }}">
+            <form method="POST" action="{{ url_for('create_template') }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Template Name</label>
