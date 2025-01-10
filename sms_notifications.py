@@ -12,8 +12,15 @@ def get_telnyx_client():
     if not api_key:
         logger.error("Telnyx API key not found in environment variables")
         return None
-    telnyx.api_key = api_key
-    return telnyx
+
+    try:
+        # Ensure we're using the API key correctly
+        telnyx.api_key = api_key.strip()
+        logger.info("Initialized Telnyx client with API key")
+        return telnyx
+    except Exception as e:
+        logger.error(f"Failed to initialize Telnyx client: {str(e)}")
+        return None
 
 def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user) -> bool:
     """Send SMS reminder with error handling, logging, and credit check."""
@@ -25,10 +32,11 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
 
         telnyx_client = get_telnyx_client()
         if not telnyx_client:
-            raise ValueError("Telnyx API key not configured")
+            logger.error("Failed to initialize Telnyx client")
+            return False
 
         # Create invite URL
-        invite_url = f"https://{os.environ.get('REPLIT_SLUG')}.repl.co/register?ref={user.referral_code}"
+        invite_url = url_for('register', ref=user.referral_code, _external=True)
 
         # Compose message with referral information
         message_text = (
@@ -38,7 +46,8 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
             f"Invite friends to get more SMS credits! Share your link: {invite_url}"
         )
 
-        message = telnyx.Message.create(
+        logger.info(f"Attempting to send SMS to {to_phone_number}")
+        message = telnyx_client.Message.create(
             from_=os.environ.get("TELNYX_MESSAGING_PROFILE_ID"),
             to=to_phone_number,
             text=message_text
@@ -64,10 +73,11 @@ def send_test_sms(to_phone_number: str, user) -> bool:
 
         telnyx_client = get_telnyx_client()
         if not telnyx_client:
-            raise ValueError("Telnyx API key not configured")
+            logger.error("Failed to initialize Telnyx client")
+            return False
 
-        # Create invite URL
-        invite_url = f"https://{os.environ.get('REPLIT_SLUG')}.repl.co/register?ref={user.referral_code}"
+        # Create invite URL using Flask's url_for
+        invite_url = url_for('register', ref=user.referral_code, _external=True)
 
         message_text = (
             "Test message from your Bin Collection Reminder Service. "
@@ -75,7 +85,8 @@ def send_test_sms(to_phone_number: str, user) -> bool:
             f"Invite friends to get more SMS credits! Share your link: {invite_url}"
         )
 
-        message = telnyx.Message.create(
+        logger.info(f"Attempting to send test SMS to {to_phone_number}")
+        message = telnyx_client.Message.create(
             from_=os.environ.get("TELNYX_MESSAGING_PROFILE_ID"),
             to=to_phone_number,
             text=message_text
