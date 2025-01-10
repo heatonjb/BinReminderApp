@@ -265,7 +265,7 @@ def calendar_view():
 @login_required
 def test_sms():
     """Route to test SMS functionality."""
-    if send_test_sms(current_user.phone):
+    if send_test_sms(current_user.phone, current_user):
         flash('Test SMS sent successfully! Please check your phone.')
     else:
         flash('Failed to send test SMS. Please check the server logs.')
