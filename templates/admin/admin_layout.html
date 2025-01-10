@@ -31,6 +31,12 @@
                             Email Logs
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin_templates' %}active{% endif %}"
+                           href="{{ url_for('admin_templates') }}">
+                            SMS Templates
+                        </a>
+                    </li>
                 </ul>
             </div>
         </nav>
