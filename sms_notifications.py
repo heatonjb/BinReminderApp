@@ -10,22 +10,32 @@ logger = logging.getLogger(__name__)
 
 def format_phone_number(phone_number: str) -> str:
     """Format phone number to E.164 format (+[country code][number])."""
-    # Remove any non-digit characters
-    cleaned = re.sub(r'\D', '', phone_number)
+    try:
+        # Remove any non-digit characters
+        cleaned = re.sub(r'\D', '', phone_number)
 
-    # If number starts with '0', assume UK number and replace with +44
-    if cleaned.startswith('0'):
-        cleaned = '44' + cleaned[1:]
+        # Log the cleaning process
+        logger.info(f"Cleaning phone number: {phone_number} -> {cleaned}")
 
-    # If no country code (less than 11 digits), assume UK and add +44
-    if len(cleaned) <= 10:
-        cleaned = '44' + cleaned
+        # If number starts with '0', assume UK number and replace with +44
+        if cleaned.startswith('0'):
+            cleaned = '44' + cleaned[1:]
+            logger.info(f"Converting UK number: added country code -> {cleaned}")
 
-    # Add + prefix if not present
-    if not cleaned.startswith('+'):
-        cleaned = '+' + cleaned
+        # If no country code (less than 11 digits), assume UK and add +44
+        if len(cleaned) <= 10:
+            cleaned = '44' + cleaned
+            logger.info(f"Adding UK country code to short number -> {cleaned}")
 
-    return cleaned
+        # Add + prefix if not present
+        if not cleaned.startswith('+'):
+            cleaned = '+' + cleaned
+            logger.info(f"Adding + prefix -> {cleaned}")
+
+        return cleaned
+    except Exception as e:
+        logger.error(f"Error formatting phone number {phone_number}: {str(e)}")
+        return phone_number
 
 def get_telnyx_client():
     """Initialize Telnyx client with API key."""
@@ -35,12 +45,14 @@ def get_telnyx_client():
         return None
 
     try:
-        # Ensure we're using the API key correctly
+        # Log API key length for verification (never log the full key)
+        logger.info(f"Initializing Telnyx client with API key (length: {len(api_key)})")
         telnyx.api_key = api_key.strip()
-        logger.info("Initialized Telnyx client with API key")
         return telnyx
     except Exception as e:
         logger.error(f"Failed to initialize Telnyx client: {str(e)}")
+        if hasattr(e, 'errors'):
+            logger.error(f"Telnyx API error details: {e.errors}")
         return None
 
 def get_message_from_template(template_name, **kwargs):
@@ -66,14 +78,15 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
             logger.error("Failed to initialize Telnyx client")
             return False
 
-        # Format phone numbers
+        # Format phone numbers with detailed logging
         formatted_to_number = format_phone_number(to_phone_number)
         source_number = format_phone_number(os.environ.get("TELNYX_PHONE_NUMBER", ""))
 
-        logger.info(f"Formatted numbers - From: {source_number}, To: {formatted_to_number}")
+        logger.info(f"Phone number formatting completed - From: {source_number}, To: {formatted_to_number}")
 
         # Create invite URL
         invite_url = url_for('register', ref=user.referral_code, _external=True)
+        logger.info(f"Generated invite URL: {invite_url}")
 
         # Get message from template or use default
         message_text = get_message_from_template('collection_reminder', 
@@ -83,7 +96,7 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
         )
 
         if not message_text:
-            # Fallback to default message if template not found
+            logger.warning("Template 'collection_reminder' not found or inactive, using default message")
             message_text = (
                 f"Reminder: Your {bin_type} bin collection is scheduled for tomorrow, "
                 f"{collection_date.strftime('%A, %B %d, %Y')}. Please ensure your bin is "
@@ -91,12 +104,21 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
                 f"Invite friends to get more SMS credits! Share your link: {invite_url}"
             )
 
-        logger.info(f"Attempting to send SMS from {source_number} to {formatted_to_number}")
-        message = telnyx_client.Message.create(
-            from_=source_number,
-            to=formatted_to_number,
-            text=message_text
-        )
+        logger.info(f"Attempting to send SMS - Length: {len(message_text)} chars")
+        logger.debug(f"Message content: {message_text}")
+
+        try:
+            message = telnyx_client.Message.create(
+                from_=source_number,
+                to=formatted_to_number,
+                text=message_text
+            )
+            logger.info(f"Telnyx API response - Message ID: {message.id}")
+        except Exception as telnyx_error:
+            logger.error(f"Telnyx API error: {str(telnyx_error)}")
+            if hasattr(telnyx_error, 'errors'):
+                logger.error(f"Detailed Telnyx error: {telnyx_error.errors}")
+            raise
 
         # Deduct SMS credit
         user.use_sms_credit()
