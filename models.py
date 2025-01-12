@@ -11,10 +11,11 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone = db.Column(db.String(20), nullable=False)
-    postcode = db.Column(db.String(10), nullable=True)  # New field for postcode
+    postcode = db.Column(db.String(10), nullable=True)
     password_hash = db.Column(db.String(256))
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
-    first_login = db.Column(db.Boolean, default=True, nullable=False)  # Track first login
+    first_login = db.Column(db.Boolean, default=True, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     schedules = db.relationship('BinSchedule', backref='user', lazy=True)
     notification_type = db.Column(db.String(10), default='both', nullable=False)
     notification_time = db.Column(db.Integer, default=16, nullable=False)
@@ -34,8 +35,8 @@ class User(UserMixin, db.Model):
     referral_code = db.Column(db.String(10), unique=True, nullable=False)
     referred_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     referrals = db.relationship('User', 
-                               backref=db.backref('referred_by', remote_side=[id]),
-                               foreign_keys=[referred_by_id])
+                              backref=db.backref('referred_by', remote_side=[id]),
+                              foreign_keys=[referred_by_id])
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
