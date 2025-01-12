@@ -1,7 +1,7 @@
 from app import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
 import secrets
 import logging
 
@@ -11,20 +11,22 @@ class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     phone = db.Column(db.String(20), nullable=False)
+    postcode = db.Column(db.String(10), nullable=True)  # New field for postcode
     password_hash = db.Column(db.String(256))
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
+    first_login = db.Column(db.Boolean, default=True, nullable=False)  # Track first login
     schedules = db.relationship('BinSchedule', backref='user', lazy=True)
-    notification_type = db.Column(db.String(10), default='both', nullable=False)  # 'email', 'sms', or 'both'
-    notification_time = db.Column(db.Integer, default=16, nullable=False)  # Hour of the day (0-23)
+    notification_type = db.Column(db.String(10), default='both', nullable=False)
+    notification_time = db.Column(db.Integer, default=16, nullable=False)
 
     # Evening notification preferences
     evening_notification = db.Column(db.Boolean, default=True, nullable=False)
-    evening_notification_time = db.Column(db.Integer, default=18, nullable=False)  # 6:30 PM
+    evening_notification_time = db.Column(db.Integer, default=18, nullable=False)
     evening_notification_type = db.Column(db.String(10), default='both', nullable=False)
 
     # Morning notification preferences
     morning_notification = db.Column(db.Boolean, default=True, nullable=False)
-    morning_notification_time = db.Column(db.Integer, default=7, nullable=False)  # 7:30 AM
+    morning_notification_time = db.Column(db.Integer, default=7, nullable=False)
     morning_notification_type = db.Column(db.String(10), default='both', nullable=False)
 
     # Referral system and SMS credits
@@ -32,8 +34,8 @@ class User(UserMixin, db.Model):
     referral_code = db.Column(db.String(10), unique=True, nullable=False)
     referred_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     referrals = db.relationship('User', 
-                              backref=db.backref('referred_by', remote_side=[id]),
-                              foreign_keys=[referred_by_id])
+                               backref=db.backref('referred_by', remote_side=[id]),
+                               foreign_keys=[referred_by_id])
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -71,11 +73,43 @@ class User(UserMixin, db.Model):
         self.sms_credits += amount
         db.session.commit()
 
+# Add new model for postcode-based collection schedules
+class PostcodeSchedule(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    postcode = db.Column(db.String(10), nullable=False)
+    bin_type = db.Column(db.String(20), nullable=False)  # 'refuse', 'recycling', or 'garden_waste'
+    collection_day = db.Column(db.String(10), nullable=False)  # Monday, Tuesday, etc.
+    frequency = db.Column(db.String(20), nullable=False)  # 'weekly' or 'biweekly'
+    last_collection = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @staticmethod
+    def get_next_collection(collection_day, last_collection, frequency):
+        """Calculate next collection date based on collection day and frequency."""
+        days = {
+            'Monday': 0, 'Tuesday': 1, 'Wednesday': 2,
+            'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6
+        }
+        today = datetime.now()
+        target_day = days[collection_day]
+        days_ahead = target_day - today.weekday()
+        if days_ahead <= 0:
+            days_ahead += 7
+        next_collection = today + timedelta(days=days_ahead)
+
+        if frequency == 'biweekly':
+            # If next collection is less than 14 days from last collection, add a week
+            if (next_collection - last_collection).days < 14:
+                next_collection += timedelta(days=7)
+
+        return next_collection
+
 class BinSchedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    bin_type = db.Column(db.String(20), nullable=False)  # 'refuse', 'recycling', or 'garden_waste'
-    frequency = db.Column(db.String(20), nullable=False)  # 'weekly' or 'biweekly'
+    bin_type = db.Column(db.String(20), nullable=False)
+    frequency = db.Column(db.String(20), nullable=False)
     next_collection = db.Column(db.DateTime, nullable=False)
 
 class EmailLog(db.Model):
@@ -83,9 +117,8 @@ class EmailLog(db.Model):
     sent_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     recipient_email = db.Column(db.String(120), nullable=False)
     bin_type = db.Column(db.String(20), nullable=False)
-    status = db.Column(db.String(10), nullable=False)  # 'success' or 'failure'
+    status = db.Column(db.String(10), nullable=False)
     error_message = db.Column(db.Text, nullable=True)
-
 
 class SMSTemplate(db.Model):
     id = db.Column(db.Integer, primary_key=True)

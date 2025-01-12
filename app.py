@@ -48,7 +48,7 @@ login_manager.login_view = 'login'
 
 # Initialize models
 with app.app_context():
-    from models import User, BinSchedule, EmailLog
+    from models import User, BinSchedule, EmailLog, PostcodeSchedule # Added PostcodeSchedule
     db.create_all()
 
 # Import other dependencies after app and models are set up
@@ -293,6 +293,11 @@ def login():
                 return render_template('auth/login.html')
 
             login_user(user)
+
+            # Redirect to first-login page for new users with postcode
+            if user.first_login and user.postcode:
+                return redirect(url_for('first_login'))
+
             return redirect(url_for('dashboard'))
 
         except Exception as e:
@@ -308,6 +313,7 @@ def register():
         try:
             email = request.form.get('email')
             phone = request.form.get('phone')
+            postcode = request.form.get('postcode')  # Get postcode from form
             password = request.form.get('password')
             referral_code = request.args.get('ref')  # Get referral code from URL
 
@@ -319,8 +325,8 @@ def register():
                 flash('Invalid phone number format. Please use a valid format (e.g., +1234567890)')
                 return redirect(url_for('register'))
 
-            # Create new user with default 6 credits
-            user = User(email=email, phone=phone, sms_credits=6)
+            # Create new user with default 6 credits and postcode
+            user = User(email=email, phone=phone, postcode=postcode, sms_credits=6)
             user.set_password(password)
 
             # Handle referral if present
@@ -361,6 +367,76 @@ Your Bin Collection Reminder Service'''
             db.session.rollback()
 
     return render_template('auth/register.html', referral_code=request.args.get('ref'))
+
+@app.route('/first-login')
+@login_required
+def first_login():
+    """Handle first-time login and schedule suggestions."""
+    if not current_user.first_login:
+        return redirect(url_for('dashboard'))
+
+    try:
+        # Get collection schedules for user's postcode
+        schedules = {}
+        postcode_schedules = PostcodeSchedule.query.filter_by(postcode=current_user.postcode).all()
+
+        for bin_type in ['refuse', 'recycling', 'garden_waste']:
+            schedule = next((s for s in postcode_schedules if s.bin_type == bin_type), None)
+            if schedule:
+                next_collection = PostcodeSchedule.get_next_collection(
+                    schedule.collection_day,
+                    schedule.last_collection,
+                    schedule.frequency
+                )
+                schedules[bin_type] = {
+                    'frequency': schedule.frequency,
+                    'collection_day': schedule.collection_day,
+                    'next_collection': next_collection
+                }
+
+        return render_template('first_login.html', schedules=schedules)
+    except Exception as e:
+        logger.error(f"Error loading first login page: {str(e)}")
+        flash('Error loading collection schedules')
+        return redirect(url_for('dashboard'))
+
+@app.route('/confirm-schedules', methods=['POST'])
+@login_required
+def confirm_schedules():
+    """Handle confirmation of suggested schedules."""
+    try:
+        for bin_type in ['refuse', 'recycling', 'garden_waste']:
+            if request.form.get(f'accept_{bin_type}'):
+                postcode_schedule = PostcodeSchedule.query.filter_by(
+                    postcode=current_user.postcode,
+                    bin_type=bin_type
+                ).first()
+
+                if postcode_schedule:
+                    next_collection = PostcodeSchedule.get_next_collection(
+                        postcode_schedule.collection_day,
+                        postcode_schedule.last_collection,
+                        postcode_schedule.frequency
+                    )
+
+                    schedule = BinSchedule(
+                        user_id=current_user.id,
+                        bin_type=bin_type,
+                        frequency=postcode_schedule.frequency,
+                        next_collection=next_collection
+                    )
+                    db.session.add(schedule)
+
+        # Mark first login as complete
+        current_user.first_login = False
+        db.session.commit()
+        flash('Collection schedules have been set up successfully')
+    except Exception as e:
+        logger.error(f"Error confirming schedules: {str(e)}")
+        db.session.rollback()
+        flash('Error setting up collection schedules')
+
+    return redirect(url_for('dashboard'))
 
 @app.route('/schedule/update', methods=['POST'])
 @login_required
