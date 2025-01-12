@@ -1,7 +1,7 @@
 import os
 import telnyx
 import logging
-from app import db
+from database import db
 from flask import url_for
 import re
 from models import SMSTemplate
@@ -45,14 +45,11 @@ def get_telnyx_client():
         return None
 
     try:
-        # Log API key length for verification (never log the full key)
         logger.info(f"Initializing Telnyx client with API key (length: {len(api_key)})")
         telnyx.api_key = api_key.strip()
         return telnyx
     except Exception as e:
         logger.error(f"Failed to initialize Telnyx client: {str(e)}")
-        if hasattr(e, 'errors'):
-            logger.error(f"Telnyx API error details: {e.errors}")
         return None
 
 def get_message_from_template(template_name, **kwargs):
@@ -96,7 +93,7 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
             bin_type=bin_type,
             collection_date=collection_date.strftime('%A, %B %d, %Y'),
             invite_url=invite_url,
-            user=user  # Pass user object to include sms_balance
+            user=user
         )
 
         if not message_text:
@@ -112,18 +109,12 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
         logger.info(f"Attempting to send SMS - Length: {len(message_text)} chars")
         logger.debug(f"Message content: {message_text}")
 
-        try:
-            message = telnyx_client.Message.create(
-                from_=source_number,
-                to=formatted_to_number,
-                text=message_text
-            )
-            logger.info(f"Telnyx API response - Message ID: {message.id}")
-        except Exception as telnyx_error:
-            logger.error(f"Telnyx API error: {str(telnyx_error)}")
-            if hasattr(telnyx_error, 'errors'):
-                logger.error(f"Detailed Telnyx error: {telnyx_error.errors}")
-            raise
+        message = telnyx_client.Message.create(
+            from_=source_number,
+            to=formatted_to_number,
+            text=message_text
+        )
+        logger.info(f"Telnyx API response - Message ID: {message.id}")
 
         # Deduct SMS credit
         user.use_sms_credit()
@@ -132,10 +123,7 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
         logger.info(f"Successfully sent SMS reminder to {formatted_to_number} (ID: {message.id})")
         return True
     except Exception as e:
-        error_details = str(e)
-        if hasattr(e, 'errors'):
-            error_details = f"Full details: {e.errors}"
-        logger.error(f"Failed to send SMS reminder to {to_phone_number}: {error_details}")
+        logger.error(f"Failed to send SMS reminder to {to_phone_number}: {str(e)}")
         return False
 
 def send_test_sms(to_phone_number: str, user) -> bool:
@@ -163,7 +151,7 @@ def send_test_sms(to_phone_number: str, user) -> bool:
         # Get message from template or use default
         message_text = get_message_from_template('test_message',
             invite_url=invite_url,
-            user=user  # Pass user object to include sms_balance
+            user=user
         )
 
         if not message_text:
@@ -188,8 +176,5 @@ def send_test_sms(to_phone_number: str, user) -> bool:
         logger.info(f"Successfully sent test SMS to {formatted_to_number} (ID: {message.id})")
         return True
     except Exception as e:
-        error_details = str(e)
-        if hasattr(e, 'errors'):
-            error_details = f"Full details: {e.errors}"
-        logger.error(f"Failed to send test SMS: {error_details}")
+        logger.error(f"Failed to send test SMS: {str(e)}")
         return False

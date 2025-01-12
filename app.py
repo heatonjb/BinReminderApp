@@ -1,24 +1,20 @@
 import os
 import re
 from flask import Flask, render_template, request, redirect, url_for, flash
-from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
-from sqlalchemy.orm import DeclarativeBase
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
+import pytz
 import logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-class Base(DeclarativeBase):
-    pass
-
 # Initialize extensions
-db = SQLAlchemy(model_class=Base)
+from database import db
 login_manager = LoginManager()
 mail = Mail()
 
@@ -48,7 +44,7 @@ login_manager.login_view = 'login'
 
 # Initialize models
 with app.app_context():
-    from models import User, BinSchedule, EmailLog, PostcodeSchedule # Added PostcodeSchedule
+    from models import User, BinSchedule, EmailLog, PostcodeSchedule
     db.create_all()
 
 # Import other dependencies after app and models are set up
@@ -70,7 +66,9 @@ def validate_phone(phone):
 def validate_date(date_str):
     try:
         date = datetime.strptime(date_str, '%Y-%m-%d')
-        return date >= datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        gmt = pytz.timezone('GMT')
+        current_time = datetime.now(gmt)
+        return date.replace(tzinfo=gmt) >= current_time.replace(hour=0, minute=0, second=0, microsecond=0)
     except ValueError:
         return False
 
@@ -143,15 +141,20 @@ Your Bin Collection Reminder Service'''
         return False
 
 def check_upcoming_collections(notification_time='evening'):
-    """Check and send reminders for tomorrow's collections."""
+    """Check and send reminders for tomorrow's collections using GMT timezone."""
     with app.app_context():
         try:
+            gmt = pytz.timezone('GMT')
+            current_time = datetime.now(gmt)
+
             if notification_time == 'evening':
                 # For evening notifications, check tomorrow's collections
-                target_date = datetime.now().date() + timedelta(days=1)
+                target_date = (current_time + timedelta(days=1)).date()
             else:
                 # For morning notifications, check today's collections
-                target_date = datetime.now().date()
+                target_date = current_time.date()
+
+            logger.info(f"Checking collections for {target_date} at {current_time} GMT")
 
             schedules = BinSchedule.query.join(User).filter(
                 BinSchedule.next_collection.between(
@@ -189,7 +192,8 @@ def check_upcoming_collections(notification_time='evening'):
                         sms_sent = send_sms_reminder(
                             user.phone,
                             schedule.bin_type,
-                            schedule.next_collection
+                            schedule.next_collection,
+                            user
                         )
                         notification_sent = notification_sent or sms_sent
 
@@ -535,8 +539,9 @@ def update_notification_preferences():
         # Save to database
         db.session.commit()
 
-        # Update scheduler jobs
+        # Update scheduler jobs with explicit GMT timezone
         scheduler.remove_all_jobs()
+        gmt = pytz.timezone('GMT')
 
         # Add evening notification job if enabled
         if evening_notification:
@@ -544,6 +549,7 @@ def update_notification_preferences():
                 check_upcoming_collections,
                 'cron',
                 hour=evening_notification_time,
+                timezone=gmt,
                 id='evening_notifications',
                 args=['evening']
             )
@@ -554,6 +560,7 @@ def update_notification_preferences():
                 check_upcoming_collections,
                 'cron',
                 hour=morning_notification_time,
+                timezone=gmt,
                 id='morning_notifications',
                 args=['morning']
             )

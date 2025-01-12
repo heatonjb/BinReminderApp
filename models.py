@@ -1,9 +1,10 @@
-from app import db
+from database import db
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import secrets
 import logging
+import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ class PostcodeSchedule(db.Model):
             'Monday': 0, 'Tuesday': 1, 'Wednesday': 2,
             'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6
         }
-        today = datetime.now()
+        today = datetime.now(pytz.timezone('GMT'))
         target_day = days[collection_day]
         days_ahead = target_day - today.weekday()
         if days_ahead <= 0:
