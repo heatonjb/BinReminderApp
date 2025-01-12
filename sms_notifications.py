@@ -60,6 +60,9 @@ def get_message_from_template(template_name, **kwargs):
     try:
         template = SMSTemplate.query.filter_by(name=template_name, is_active=True).first()
         if template:
+            # Add sms_balance to kwargs if user is provided
+            if 'user' in kwargs:
+                kwargs['sms_balance'] = kwargs['user'].sms_credits
             return template.render(**kwargs)
     except Exception as e:
         logger.error(f"Error getting template '{template_name}': {str(e)}")
@@ -92,7 +95,8 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
         message_text = get_message_from_template('collection_reminder', 
             bin_type=bin_type,
             collection_date=collection_date.strftime('%A, %B %d, %Y'),
-            invite_url=invite_url
+            invite_url=invite_url,
+            user=user  # Pass user object to include sms_balance
         )
 
         if not message_text:
@@ -101,6 +105,7 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
                 f"Reminder: Your {bin_type} bin collection is scheduled for tomorrow, "
                 f"{collection_date.strftime('%A, %B %d, %Y')}. Please ensure your bin is "
                 f"placed outside before collection time.\n\n"
+                f"You have {user.sms_credits} SMS credits remaining.\n"
                 f"Invite friends to get more SMS credits! Share your link: {invite_url}"
             )
 
@@ -157,13 +162,15 @@ def send_test_sms(to_phone_number: str, user) -> bool:
 
         # Get message from template or use default
         message_text = get_message_from_template('test_message',
-            invite_url=invite_url
+            invite_url=invite_url,
+            user=user  # Pass user object to include sms_balance
         )
 
         if not message_text:
             message_text = (
                 "Test message from your Bin Collection Reminder Service. "
                 "SMS notifications are working correctly.\n\n"
+                f"You have {user.sms_credits} SMS credits remaining.\n"
                 f"Invite friends to get more SMS credits! Share your link: {invite_url}"
             )
 
