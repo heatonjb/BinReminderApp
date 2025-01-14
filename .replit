@@ -27,11 +27,11 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python app.py"
+args = "python main.py"
 waitForPort = 5000
 
 [deployment]
-run = ["sh", "-c", "python app.py"]
+run = ["sh", "-c", "python main.py"]
 deploymentTarget = "cloudrun"
 
 [[ports]]
