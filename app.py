@@ -146,15 +146,16 @@ def check_upcoming_collections(notification_time='evening'):
         try:
             gmt = pytz.timezone('GMT')
             current_time = datetime.now(gmt)
+            logger.info(f"Starting collection check at {current_time} GMT")
 
             if notification_time == 'evening':
                 # For evening notifications, check tomorrow's collections
                 target_date = (current_time + timedelta(days=1)).date()
+                logger.info(f"Checking tomorrow's collections for {target_date}")
             else:
                 # For morning notifications, check today's collections
                 target_date = current_time.date()
-
-            logger.info(f"Checking collections for {target_date} at {current_time} GMT")
+                logger.info(f"Checking today's collections for {target_date}")
 
             schedules = BinSchedule.query.join(User).filter(
                 BinSchedule.next_collection.between(
@@ -163,32 +164,38 @@ def check_upcoming_collections(notification_time='evening'):
                 )
             ).all()
 
-            logger.info(f"Found {len(schedules)} collections scheduled for {'tomorrow' if notification_time == 'evening' else 'today'}")
+            logger.info(f"Found {len(schedules)} collections scheduled for {target_date}")
 
             for schedule in schedules:
                 notification_sent = False
                 user = schedule.user
+                logger.info(f"Processing schedule for user {user.email}, bin type: {schedule.bin_type}")
 
                 # Determine which notification preferences to use
                 if notification_time == 'evening':
                     should_notify = user.evening_notification
                     notification_type = user.evening_notification_type
+                    logger.info(f"Evening notification settings - enabled: {should_notify}, type: {notification_type}")
                 else:
                     should_notify = user.morning_notification
                     notification_type = user.morning_notification_type
+                    logger.info(f"Morning notification settings - enabled: {should_notify}, type: {notification_type}")
 
                 if should_notify:
                     # Send email if configured
                     if notification_type in ['email', 'both']:
+                        logger.info(f"Attempting to send email notification to {user.email}")
                         email_sent = send_collection_reminder(
                             user.email,
                             schedule.bin_type,
                             schedule.next_collection
                         )
                         notification_sent = notification_sent or email_sent
+                        logger.info(f"Email notification {'sent successfully' if email_sent else 'failed'}")
 
                     # Send SMS if configured
                     if notification_type in ['sms', 'both']:
+                        logger.info(f"Attempting to send SMS notification to {user.phone}")
                         sms_sent = send_sms_reminder(
                             user.phone,
                             schedule.bin_type,
@@ -196,18 +203,18 @@ def check_upcoming_collections(notification_time='evening'):
                             user
                         )
                         notification_sent = notification_sent or sms_sent
+                        logger.info(f"SMS notification {'sent successfully' if sms_sent else 'failed'}")
 
                     if notification_sent and notification_time == 'evening':
                         # Update next collection date based on frequency
-                        # Only update after evening notification
-                        if schedule.frequency == 'weekly':
-                            schedule.next_collection += timedelta(days=7)
-                        else:  # biweekly
-                            schedule.next_collection += timedelta(days=14)
-
                         try:
+                            if schedule.frequency == 'weekly':
+                                schedule.next_collection += timedelta(days=7)
+                            else:  # biweekly
+                                schedule.next_collection += timedelta(days=14)
+
                             db.session.commit()
-                            logger.info(f"Updated next collection date for user {user.email}")
+                            logger.info(f"Updated next collection date to {schedule.next_collection}")
                         except Exception as e:
                             db.session.rollback()
                             logger.error(f"Failed to update next collection date: {str(e)}")
@@ -538,6 +545,9 @@ def update_notification_preferences():
 
         # Save to database
         db.session.commit()
+        logger.info(f"Updated notification preferences for user {current_user.email}")
+        logger.info(f"Evening: {evening_notification} at {evening_notification_time}:00 GMT ({evening_notification_type})")
+        logger.info(f"Morning: {morning_notification} at {morning_notification_time}:00 GMT ({morning_notification_type})")
 
         # Update scheduler jobs with explicit GMT timezone
         scheduler.remove_all_jobs()
@@ -549,10 +559,13 @@ def update_notification_preferences():
                 check_upcoming_collections,
                 'cron',
                 hour=evening_notification_time,
+                minute=0,
                 timezone=gmt,
                 id='evening_notifications',
-                args=['evening']
+                args=['evening'],
+                replace_existing=True
             )
+            logger.info(f"Added evening notification job at {evening_notification_time}:00 GMT")
 
         # Add morning notification job if enabled
         if morning_notification:
@@ -560,10 +573,13 @@ def update_notification_preferences():
                 check_upcoming_collections,
                 'cron',
                 hour=morning_notification_time,
+                minute=0,
                 timezone=gmt,
                 id='morning_notifications',
-                args=['morning']
+                args=['morning'],
+                replace_existing=True
             )
+            logger.info(f"Added morning notification job at {morning_notification_time}:00 GMT")
 
         flash('Notification preferences updated successfully')
         return redirect(url_for('dashboard'))
