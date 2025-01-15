@@ -1,13 +1,24 @@
-from flask import render_template, redirect, url_for, request, flash
+from flask import render_template, redirect, url_for, request, flash, jsonify
 from app import app, db
 from models import User, BinSchedule, EmailLog, SMSTemplate
 from decorators import admin_required
 from sqlalchemy import func
 from datetime import datetime, timedelta
 import logging
-import os  # Add this import
+import os
+import pytz
 
 logger = logging.getLogger(__name__)
+
+@app.route('/server-time')
+def server_time():
+    """Return current server time in GMT"""
+    gmt = pytz.timezone('GMT')
+    current_time = datetime.now(gmt)
+    return jsonify({
+        'gmt_time': current_time.strftime('%Y-%m-%d %H:%M:%S %Z'),
+        'timezone': str(current_time.tzinfo)
+    })
 
 @app.route('/admin')
 @admin_required
