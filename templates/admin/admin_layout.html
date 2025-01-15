@@ -32,6 +32,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin_sms_logs' %}active{% endif %}"
+                           href="{{ url_for('admin_sms_logs') }}">
+                            SMS Logs
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == 'admin_templates' %}active{% endif %}"
                            href="{{ url_for('admin_templates') }}">
                             SMS Templates

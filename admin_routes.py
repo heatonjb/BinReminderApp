@@ -1,6 +1,6 @@
 from flask import render_template, redirect, url_for, request, flash, jsonify
 from app import app, db
-from models import User, BinSchedule, EmailLog, SMSTemplate
+from models import User, BinSchedule, EmailLog, SMSTemplate, SMSLog # Added SMSLog import
 from decorators import admin_required
 from sqlalchemy import func
 from datetime import datetime, timedelta
@@ -229,4 +229,15 @@ def admin_email_logs():
     except Exception as e:
         logger.error(f"Error loading email logs: {str(e)}")
         flash('Error loading email logs')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/sms')
+@admin_required
+def admin_sms_logs():
+    try:
+        logs = SMSLog.query.order_by(SMSLog.sent_at.desc()).all()
+        return render_template('admin/sms_logs.html', logs=logs)
+    except Exception as e:
+        logger.error(f"Error loading SMS logs: {str(e)}")
+        flash('Error loading SMS logs')
         return redirect(url_for('admin_dashboard'))

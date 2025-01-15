@@ -155,3 +155,12 @@ class SMSTemplate(db.Model):
         except Exception as e:
             logger.error(f"Template rendering error: {str(e)}")
             return None
+
+class SMSLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sent_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(GMT_TZ))
+    recipient_phone = db.Column(db.String(20), nullable=False)
+    message_text = db.Column(db.Text, nullable=False)
+    status = db.Column(db.String(10), nullable=False)
+    error_message = db.Column(db.Text, nullable=True)
+    bin_type = db.Column(db.String(20), nullable=True)
