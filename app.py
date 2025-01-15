@@ -94,6 +94,12 @@ def send_collection_reminder(user_email, bin_type, collection_date):
     """Send email reminder with error handling and logging."""
     try:
         with app.app_context():
+            user = User.query.filter_by(email=user_email).first()
+            if not user:
+                raise ValueError(f"User not found for email: {user_email}")
+
+            invite_url = url_for('register', ref=user.referral_code, _external=True)
+
             msg = Message(
                 subject=f'Bin Collection Reminder: {bin_type.title()} Collection Tomorrow',
                 recipients=[user_email],
@@ -102,6 +108,17 @@ def send_collection_reminder(user_email, bin_type, collection_date):
 This is a reminder that your {bin_type} bin collection is scheduled for tomorrow, {collection_date.strftime('%A, %B %d, %Y')}.
 
 Please ensure your bin is placed outside before the collection time.
+
+Your Account Information:
+------------------------
+SMS Credits Balance: {user.sms_credits} credits
+Want more credits? Share your referral link with friends!
+
+Referral Program:
+----------------
+• You'll get 20 SMS credits for each friend who signs up
+• Your friends will get 10 bonus SMS credits to start
+• Share your unique referral link: {invite_url}
 
 Best regards,
 Your Bin Collection Reminder Service'''
