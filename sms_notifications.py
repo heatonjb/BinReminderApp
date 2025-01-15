@@ -4,7 +4,7 @@ import logging
 from database import db
 from flask import url_for
 import re
-from models import SMSTemplate
+from models import SMSTemplate, SMSLog  # Added SMSLog import
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +116,15 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
         )
         logger.info(f"Telnyx API response - Message ID: {message.id}")
 
+        # Create SMS log entry
+        sms_log = SMSLog(
+            recipient_phone=formatted_to_number,
+            message_text=message_text,
+            status='success',
+            bin_type=bin_type
+        )
+        db.session.add(sms_log)
+
         # Deduct SMS credit
         user.use_sms_credit()
         db.session.commit()
@@ -124,6 +133,19 @@ def send_sms_reminder(to_phone_number: str, bin_type: str, collection_date, user
         return True
     except Exception as e:
         logger.error(f"Failed to send SMS reminder to {to_phone_number}: {str(e)}")
+        # Log failed SMS attempt
+        try:
+            sms_log = SMSLog(
+                recipient_phone=format_phone_number(to_phone_number),
+                message_text=message_text if 'message_text' in locals() else "Message creation failed",
+                status='failure',
+                error_message=str(e),
+                bin_type=bin_type
+            )
+            db.session.add(sms_log)
+            db.session.commit()
+        except Exception as log_error:
+            logger.error(f"Failed to create SMS log entry: {str(log_error)}")
         return False
 
 def send_test_sms(to_phone_number: str, user) -> bool:
@@ -169,6 +191,14 @@ def send_test_sms(to_phone_number: str, user) -> bool:
             text=message_text
         )
 
+        # Create SMS log entry
+        sms_log = SMSLog(
+            recipient_phone=formatted_to_number,
+            message_text=message_text,
+            status='success'
+        )
+        db.session.add(sms_log)
+
         # Deduct SMS credit
         user.use_sms_credit()
         db.session.commit()
@@ -177,4 +207,16 @@ def send_test_sms(to_phone_number: str, user) -> bool:
         return True
     except Exception as e:
         logger.error(f"Failed to send test SMS: {str(e)}")
+        # Log failed SMS attempt
+        try:
+            sms_log = SMSLog(
+                recipient_phone=format_phone_number(to_phone_number),
+                message_text=message_text if 'message_text' in locals() else "Message creation failed",
+                status='failure',
+                error_message=str(e)
+            )
+            db.session.add(sms_log)
+            db.session.commit()
+        except Exception as log_error:
+            logger.error(f"Failed to create SMS log entry: {str(log_error)}")
         return False
