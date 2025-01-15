@@ -8,10 +8,27 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import pytz
 import logging
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Initialize scheduler with GMT timezone
+scheduler = BackgroundScheduler()
+gmt = pytz.timezone('GMT')
+scheduler.configure(timezone=gmt)
+
+def job_listener(event):
+    if event.exception:
+        logger.error(f'Job failed: {event.job_id}')
+        logger.error(f'Exception: {event.exception}')
+        logger.error(f'Traceback: {event.traceback}')
+    else:
+        logger.info(f'Job completed successfully: {event.job_id}')
+
+scheduler.add_listener(job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
 
 # Initialize extensions
 from database import db
@@ -51,9 +68,10 @@ with app.app_context():
 from sms_notifications import send_sms_reminder, send_test_sms
 from decorators import admin_required
 
+#Import here is unnecessary as scheduler is already initialized above.
 # Initialize scheduler after all imports
-from apscheduler.schedulers.background import BackgroundScheduler
-scheduler = BackgroundScheduler()
+#from apscheduler.schedulers.background import BackgroundScheduler
+#scheduler = BackgroundScheduler()
 
 @login_manager.user_loader
 def load_user(user_id):
