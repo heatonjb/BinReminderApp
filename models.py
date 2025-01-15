@@ -8,6 +8,8 @@ import pytz
 
 logger = logging.getLogger(__name__)
 
+GMT_TZ = pytz.timezone('GMT')
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -16,7 +18,7 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256))
     is_admin = db.Column(db.Boolean, default=False, nullable=False)
     first_login = db.Column(db.Boolean, default=True, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(GMT_TZ))
     schedules = db.relationship('BinSchedule', backref='user', lazy=True)
     notification_type = db.Column(db.String(10), default='both', nullable=False)
     notification_time = db.Column(db.Integer, default=16, nullable=False)
@@ -36,8 +38,8 @@ class User(UserMixin, db.Model):
     referral_code = db.Column(db.String(10), unique=True, nullable=False)
     referred_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     referrals = db.relationship('User', 
-                              backref=db.backref('referred_by', remote_side=[id]),
-                              foreign_keys=[referred_by_id])
+                               backref=db.backref('referred_by', remote_side=[id]),
+                               foreign_keys=[referred_by_id])
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -75,7 +77,6 @@ class User(UserMixin, db.Model):
         self.sms_credits += amount
         db.session.commit()
 
-# Add new model for postcode-based collection schedules
 class PostcodeSchedule(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     postcode = db.Column(db.String(10), nullable=False)
@@ -83,8 +84,8 @@ class PostcodeSchedule(db.Model):
     collection_day = db.Column(db.String(10), nullable=False)  # Monday, Tuesday, etc.
     frequency = db.Column(db.String(20), nullable=False)  # 'weekly' or 'biweekly'
     last_collection = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(GMT_TZ))
+    updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(GMT_TZ), onupdate=lambda: datetime.now(GMT_TZ))
 
     @staticmethod
     def get_next_collection(collection_day, last_collection, frequency):
@@ -93,7 +94,7 @@ class PostcodeSchedule(db.Model):
             'Monday': 0, 'Tuesday': 1, 'Wednesday': 2,
             'Thursday': 3, 'Friday': 4, 'Saturday': 5, 'Sunday': 6
         }
-        today = datetime.now(pytz.timezone('GMT'))
+        today = datetime.now(GMT_TZ)
         target_day = days[collection_day]
         days_ahead = target_day - today.weekday()
         if days_ahead <= 0:
@@ -102,7 +103,7 @@ class PostcodeSchedule(db.Model):
 
         if frequency == 'biweekly':
             # If next collection is less than 14 days from last collection, add a week
-            if (next_collection - last_collection).days < 14:
+            if (next_collection - last_collection.astimezone(GMT_TZ)).days < 14:
                 next_collection += timedelta(days=7)
 
         return next_collection
@@ -114,9 +115,19 @@ class BinSchedule(db.Model):
     frequency = db.Column(db.String(20), nullable=False)
     next_collection = db.Column(db.DateTime, nullable=False)
 
+    def set_next_collection(self, next_date):
+        """Set next collection date ensuring GMT timezone"""
+        if isinstance(next_date, str):
+            # Parse string date and set timezone to GMT
+            next_date = datetime.strptime(next_date, '%Y-%m-%d').replace(tzinfo=GMT_TZ)
+        elif isinstance(next_date, datetime):
+            # Convert existing datetime to GMT
+            next_date = next_date.astimezone(GMT_TZ)
+        self.next_collection = next_date
+
 class EmailLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    sent_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    sent_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(GMT_TZ))
     recipient_email = db.Column(db.String(120), nullable=False)
     bin_type = db.Column(db.String(20), nullable=False)
     status = db.Column(db.String(10), nullable=False)
@@ -128,8 +139,8 @@ class SMSTemplate(db.Model):
     template_text = db.Column(db.Text, nullable=False)
     description = db.Column(db.String(200))
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(GMT_TZ))
+    updated_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(GMT_TZ), onupdate=lambda: datetime.now(GMT_TZ))
 
     def render(self, **kwargs):
         """
