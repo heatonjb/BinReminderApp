@@ -507,6 +507,15 @@ def update_notification_preferences():
         morning_notification_time = request.form.get('morning_notification_time')
         morning_notification_type = request.form.get('morning_notification_type')
 
+        # Set default values when notifications are disabled
+        if not evening_notification:
+            evening_notification_time = 18  # Default to 6 PM
+            evening_notification_type = 'email'  # Default to email
+
+        if not morning_notification:
+            morning_notification_time = 8  # Default to 8 AM
+            morning_notification_type = 'email'  # Default to email
+
         # Validate evening notification settings
         if evening_notification:
             if evening_notification_type not in ['email', 'sms', 'both']:
