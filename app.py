@@ -667,7 +667,6 @@ def check_notifications():
 
         gmt = pytz.timezone('GMT')
         current_time = datetime.now(gmt)
-        one_hour_ago = current_time - timedelta(hours=1)
 
         notifications_sent = {
             'evening': 0,
@@ -676,18 +675,21 @@ def check_notifications():
         }
 
         # Check evening notifications (for tomorrow's collections)
-        evening_start = 12  # 12:00 GMT
-        evening_end = 22    # 22:00 GMT
+        # Get all users with evening notifications enabled
+        evening_users = User.query.filter(
+            User.evening_notification == True
+        ).all()
 
-        # Check if any evening notifications were missed in the last hour
-        if one_hour_ago.hour >= evening_start and current_time.hour <= evening_end:
-            users = User.query.filter(
-                User.evening_notification == True,
-                User.evening_notification_time >= one_hour_ago.hour,
-                User.evening_notification_time <= current_time.hour
-            ).all()
+        for user in evening_users:
+            # Check if user's evening notification time has passed for today
+            user_notification_time = current_time.replace(
+                hour=user.evening_notification_time,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
 
-            for user in users:
+            if current_time > user_notification_time:
                 try:
                     check_upcoming_collections('evening')
                     notifications_sent['evening'] += 1
@@ -696,18 +698,21 @@ def check_notifications():
                     notifications_sent['errors'] += 1
 
         # Check morning notifications (for today's collections)
-        morning_start = 5   # 5:00 GMT
-        morning_end = 11    # 11:00 GMT
+        # Get all users with morning notifications enabled
+        morning_users = User.query.filter(
+            User.morning_notification == True
+        ).all()
 
-        # Check if any morning notifications were missed in the last hour
-        if one_hour_ago.hour >= morning_start and current_time.hour <= morning_end:
-            users = User.query.filter(
-                User.morning_notification == True,
-                User.morning_notification_time >= one_hour_ago.hour,
-                User.morning_notification_time <= current_time.hour
-            ).all()
+        for user in morning_users:
+            # Check if user's morning notification time has passed for today
+            user_notification_time = current_time.replace(
+                hour=user.morning_notification_time,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
 
-            for user in users:
+            if current_time > user_notification_time:
                 try:
                     check_upcoming_collections('morning')
                     notifications_sent['morning'] += 1
