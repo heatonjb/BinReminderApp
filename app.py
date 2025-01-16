@@ -657,14 +657,8 @@ with app.app_context():
 def check_notifications():
     """
     Public endpoint to check and send overdue notifications.
-    Requires API key in header: X-API-Key
     """
     try:
-        # Basic security check
-        api_key = request.headers.get('X-API-Key')
-        if not api_key or api_key != os.environ.get('NOTIFICATION_API_KEY'):
-            return jsonify({'error': 'Invalid API key'}), 401
-
         gmt = pytz.timezone('GMT')
         current_time = datetime.now(gmt)
 
