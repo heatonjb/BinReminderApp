@@ -1,6 +1,6 @@
 import os
 import re
-from flask import Flask, render_template, request, redirect, url_for, flash
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
@@ -652,6 +652,82 @@ def make_admin():
 # Import admin routes after all app setup is complete
 with app.app_context():
     import admin_routes
+
+@app.route('/api/check-notifications', methods=['GET'])
+def check_notifications():
+    """
+    Public endpoint to check and send overdue notifications.
+    Requires API key in header: X-API-Key
+    """
+    try:
+        # Basic security check
+        api_key = request.headers.get('X-API-Key')
+        if not api_key or api_key != os.environ.get('NOTIFICATION_API_KEY'):
+            return jsonify({'error': 'Invalid API key'}), 401
+
+        gmt = pytz.timezone('GMT')
+        current_time = datetime.now(gmt)
+        one_hour_ago = current_time - timedelta(hours=1)
+
+        notifications_sent = {
+            'evening': 0,
+            'morning': 0,
+            'errors': 0
+        }
+
+        # Check evening notifications (for tomorrow's collections)
+        evening_start = 12  # 12:00 GMT
+        evening_end = 22    # 22:00 GMT
+
+        # Check if any evening notifications were missed in the last hour
+        if one_hour_ago.hour >= evening_start and current_time.hour <= evening_end:
+            users = User.query.filter(
+                User.evening_notification == True,
+                User.evening_notification_time >= one_hour_ago.hour,
+                User.evening_notification_time <= current_time.hour
+            ).all()
+
+            for user in users:
+                try:
+                    check_upcoming_collections('evening')
+                    notifications_sent['evening'] += 1
+                except Exception as e:
+                    logger.error(f"Error sending evening notification: {str(e)}")
+                    notifications_sent['errors'] += 1
+
+        # Check morning notifications (for today's collections)
+        morning_start = 5   # 5:00 GMT
+        morning_end = 11    # 11:00 GMT
+
+        # Check if any morning notifications were missed in the last hour
+        if one_hour_ago.hour >= morning_start and current_time.hour <= morning_end:
+            users = User.query.filter(
+                User.morning_notification == True,
+                User.morning_notification_time >= one_hour_ago.hour,
+                User.morning_notification_time <= current_time.hour
+            ).all()
+
+            for user in users:
+                try:
+                    check_upcoming_collections('morning')
+                    notifications_sent['morning'] += 1
+                except Exception as e:
+                    logger.error(f"Error sending morning notification: {str(e)}")
+                    notifications_sent['errors'] += 1
+
+        return jsonify({
+            'status': 'success',
+            'timestamp': current_time.isoformat(),
+            'notifications_sent': notifications_sent
+        })
+
+    except Exception as e:
+        logger.error(f"Error in check_notifications endpoint: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
+
 
 if __name__ == '__main__':
     # Start the scheduler
