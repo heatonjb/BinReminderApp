@@ -2,7 +2,6 @@ import os
 import re
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
-from flask_mail import Mail, Message
 from flask_migrate import Migrate
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -10,6 +9,7 @@ import pytz
 import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
+from mailersend import emails
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +33,6 @@ scheduler.add_listener(job_listener, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
 # Initialize extensions
 from database import db
 login_manager = LoginManager()
-mail = Mail()
 
 # Create the app
 app = Flask(__name__)
@@ -44,19 +43,13 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
 }
 
-# Mail configuration
-app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-app.config['MAIL_PORT'] = 587
-app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
-app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
-app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_USERNAME')
+# Initialize MailerSend client
+mailer = emails.NewEmail(os.environ.get('MAILERSEND_API_KEY'))
 
 # Initialize extensions with app
 db.init_app(app)
 migrate = Migrate(app, db)
 login_manager.init_app(app)
-mail.init_app(app)
 login_manager.login_view = 'login'
 
 # Initialize models
@@ -68,28 +61,6 @@ with app.app_context():
 from sms_notifications import send_sms_reminder, send_test_sms
 from decorators import admin_required
 
-#Import here is unnecessary as scheduler is already initialized above.
-# Initialize scheduler after all imports
-#from apscheduler.schedulers.background import BackgroundScheduler
-#scheduler = BackgroundScheduler()
-
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-def validate_phone(phone):
-    phone = re.sub(r'[-\s()]', '', phone)
-    return bool(re.match(r'^\+?1?\d{10,12}$', phone))
-
-def validate_date(date_str):
-    try:
-        date = datetime.strptime(date_str, '%Y-%m-%d')
-        gmt = pytz.timezone('GMT')
-        current_time = datetime.now(gmt)
-        return date.replace(tzinfo=gmt) >= current_time.replace(hour=0, minute=0, second=0, microsecond=0)
-    except ValueError:
-        return False
-
 def send_collection_reminder(user_email, bin_type, collection_date):
     """Send email reminder with error handling and logging."""
     try:
@@ -100,10 +71,8 @@ def send_collection_reminder(user_email, bin_type, collection_date):
 
             invite_url = url_for('register', ref=user.referral_code, _external=True)
 
-            msg = Message(
-                subject=f'Bin Collection Reminder: {bin_type.title()} Collection Tomorrow',
-                recipients=[user_email],
-                body=f'''Dear Resident,
+            # Create email using MailerSend
+            mail_body = f'''Dear Resident,
 
 This is a reminder that your {bin_type} bin collection is scheduled for tomorrow, {collection_date.strftime('%A, %B %d, %Y')}.
 
@@ -122,8 +91,20 @@ Referral Program:
 
 Best regards,
 Your Bin Collection Reminder Service'''
-            )
-            mail.send(msg)
+
+            # Prepare email data
+            mail_data = {
+                "from": {"email": os.environ.get('MAILERSEND_FROM_EMAIL')},
+                "to": [{"email": user_email}],
+                "subject": f'Bin Collection Reminder: {bin_type.title()} Collection Tomorrow',
+                "text": mail_body
+            }
+
+            # Send email using MailerSend
+            response = mailer.send(mail_data)
+
+            if not response.status_code == 202:
+                raise Exception(f"MailerSend API error: {response.text}")
 
             # Log successful email
             email_log = EmailLog(
@@ -158,21 +139,42 @@ def send_test_email(recipient_email):
     """Send a test email to verify email configuration."""
     try:
         with app.app_context():
-            msg = Message(
-                subject='Test Email - Bin Collection Reminder Service',
-                recipients=[recipient_email],
-                body='''This is a test email from your Bin Collection Reminder Service.
+            # Create email using MailerSend
+            mail_data = {
+                "from": {"email": os.environ.get('MAILERSEND_FROM_EMAIL')},
+                "to": [{"email": recipient_email}],
+                "subject": 'Test Email - Bin Collection Reminder Service',
+                "text": '''This is a test email from your Bin Collection Reminder Service.
 
 If you received this email, the email notification system is working correctly.
 
 Best regards,
 Your Bin Collection Reminder Service'''
-            )
-            mail.send(msg)
+            }
+
+            # Send email using MailerSend
+            response = mailer.send(mail_data)
+
+            if not response.status_code == 202:
+                raise Exception(f"MailerSend API error: {response.text}")
+
             logger.info(f"Successfully sent test email to {recipient_email}")
             return True
     except Exception as e:
         logger.error(f"Failed to send test email: {str(e)}")
+        return False
+
+def validate_phone(phone):
+    phone = re.sub(r'[-\s()]', '', phone)
+    return bool(re.match(r'^\+?1?\d{10,12}$', phone))
+
+def validate_date(date_str):
+    try:
+        date = datetime.strptime(date_str, '%Y-%m-%d')
+        gmt = pytz.timezone('GMT')
+        current_time = datetime.now(gmt)
+        return date.replace(tzinfo=gmt) >= current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+    except ValueError:
         return False
 
 def check_upcoming_collections(notification_time='evening'):
@@ -256,6 +258,11 @@ def check_upcoming_collections(notification_time='evening'):
 
         except Exception as e:
             logger.error(f"Error in check_upcoming_collections: {str(e)}")
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 
 @app.route('/')
 def index():

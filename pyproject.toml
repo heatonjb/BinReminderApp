@@ -16,4 +16,5 @@ dependencies = [
     "sqlalchemy>=2.0.36",
     "werkzeug>=3.0.4",
     "pytz>=2024.2",
+    "mailersend>=0.5.8",
 ]
