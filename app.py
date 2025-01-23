@@ -47,6 +47,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Initialize MailerSend client with error handling
 try:
     mailer = emails.NewEmail(os.environ.get('MAILERSEND_API_KEY'))
+    logger.info("MailerSend client initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize MailerSend: {str(e)}")
     mailer = None
@@ -80,8 +81,8 @@ def send_collection_reminder(user_email, bin_type, collection_date):
                 raise ValueError(f"User not found for email: {user_email}")
 
             invite_url = url_for('register', ref=user.referral_code, _external=True)
+            logger.info(f"Preparing email for {user_email} with referral URL: {invite_url}")
 
-            # Mail content remains unchanged
             mail_body = f'''Dear Resident,
 
 This is a reminder that your {bin_type} bin collection is scheduled for tomorrow, {collection_date.strftime('%A, %B %d, %Y')}.
@@ -103,14 +104,24 @@ Best regards,
 Your Bin Collection Reminder Service'''
 
             mail_data = {
-                "from": {"email": os.environ.get('MAILERSEND_FROM_EMAIL')},
+                "from": {
+                    "email": os.environ.get('MAILERSEND_FROM_EMAIL'),
+                    "name": "Bin Collection Reminder"
+                },
                 "to": [{"email": user_email}],
                 "subject": f'Bin Collection Reminder: {bin_type.title()} Collection Tomorrow',
                 "text": mail_body
             }
 
+            logger.info(f"Attempting to send email to {user_email} with MailerSend")
+            logger.debug(f"Email data: {mail_data}")
+
             # Send email using MailerSend
-            mailer.send(mail_data)
+            try:
+                response = mailer.send(mail_data)
+                logger.info(f"MailerSend API Response for {user_email}: {response}")
+            except Exception as mail_error:
+                raise Exception(f"MailerSend API error: {str(mail_error)}")
 
             # Log successful email
             email_log = EmailLog(
@@ -148,9 +159,15 @@ def send_test_email(recipient_email):
         if not mailer:
             raise Exception("MailerSend client not initialized")
 
+        logger.info(f"Sending test email to {recipient_email}")
+        logger.info(f"Using sender email: {os.environ.get('MAILERSEND_FROM_EMAIL')}")
+
         with app.app_context():
             mail_data = {
-                "from": {"email": os.environ.get('MAILERSEND_FROM_EMAIL')},
+                "from": {
+                    "email": os.environ.get('MAILERSEND_FROM_EMAIL'),
+                    "name": "Bin Collection Reminder"
+                },
                 "to": [{"email": recipient_email}],
                 "subject": 'Test Email - Bin Collection Reminder Service',
                 "text": '''This is a test email from your Bin Collection Reminder Service.
@@ -162,7 +179,12 @@ Your Bin Collection Reminder Service'''
             }
 
             # Send email using MailerSend and get response
-            mailer.send(mail_data)
+            try:
+                response = mailer.send(mail_data)
+                logger.info(f"MailerSend API Response for test email to {recipient_email}: {response}")
+            except Exception as mail_error:
+                raise Exception(f"MailerSend API error: {str(mail_error)}")
+
             logger.info(f"Successfully sent test email to {recipient_email}")
             return True
 
