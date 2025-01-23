@@ -1,6 +1,6 @@
-# Municipal Waste Management Platform
+# Bins Out - Never miss a bin or recyling day again
 
-An advanced municipal waste management platform that optimizes bin collection services through intelligent communication technologies and a comprehensive operational ecosystem.
+A refuse reminder platform that optimizes bin collection services
 
 ## Features
 
