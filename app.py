@@ -110,10 +110,7 @@ Your Bin Collection Reminder Service'''
             }
 
             # Send email using MailerSend
-            response = mailer.send(mail_data)
-
-            if not response.status_code == 202:
-                raise Exception(f"MailerSend API error: {response.text}")
+            mailer.send(mail_data)
 
             # Log successful email
             email_log = EmailLog(
@@ -126,6 +123,7 @@ Your Bin Collection Reminder Service'''
 
             logger.info(f"Successfully sent reminder email to {user_email} for {bin_type} collection")
             return True
+
     except Exception as e:
         logger.error(f"Failed to send reminder email to {user_email}: {str(e)}")
 
@@ -163,13 +161,11 @@ Best regards,
 Your Bin Collection Reminder Service'''
             }
 
-            response = mailer.send(mail_data)
-
-            if not response.status_code == 202:
-                raise Exception(f"MailerSend API error: {response.text}")
-
+            # Send email using MailerSend and get response
+            mailer.send(mail_data)
             logger.info(f"Successfully sent test email to {recipient_email}")
             return True
+
     except Exception as e:
         logger.error(f"Failed to send test email: {str(e)}")
         return False
@@ -877,8 +873,7 @@ def check_notifications():
                     notifications_sent['errors'] += 1
 
         logger.info(f"Notifications sent: {notifications_sent}")
-        return jsonify({
-            'status': 'success',
+        return jsonify({'status': 'success',
             'timestamp': current_time.isoformat(),
             'notifications_sent': notifications_sent
         })
