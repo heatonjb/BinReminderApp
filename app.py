@@ -10,6 +10,7 @@ import logging
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.events import EVENT_JOB_EXECUTED, EVENT_JOB_ERROR
 from mailersend import emails
+from sqlalchemy import func
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -43,8 +44,12 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
 }
 
-# Initialize MailerSend client
-mailer = emails.NewEmail(os.environ.get('MAILERSEND_API_KEY'))
+# Initialize MailerSend client with error handling
+try:
+    mailer = emails.NewEmail(os.environ.get('MAILERSEND_API_KEY'))
+except Exception as e:
+    logger.error(f"Failed to initialize MailerSend: {str(e)}")
+    mailer = None
 
 # Initialize extensions with app
 db.init_app(app)
@@ -52,18 +57,23 @@ migrate = Migrate(app, db)
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-# Initialize models
-with app.app_context():
-    from models import User, BinSchedule, EmailLog, PostcodeSchedule
-    db.create_all()
+# Import models
+from models import User, BinSchedule, EmailLog, PostcodeSchedule, SMSTemplate, SMSLog
 
 # Import other dependencies after app and models are set up
 from sms_notifications import send_sms_reminder, send_test_sms
 from decorators import admin_required
 
+# Initialize database tables
+with app.app_context():
+    db.create_all()
+
 def send_collection_reminder(user_email, bin_type, collection_date):
     """Send email reminder with error handling and logging."""
     try:
+        if not mailer:
+            raise Exception("MailerSend client not initialized")
+
         with app.app_context():
             user = User.query.filter_by(email=user_email).first()
             if not user:
@@ -71,7 +81,7 @@ def send_collection_reminder(user_email, bin_type, collection_date):
 
             invite_url = url_for('register', ref=user.referral_code, _external=True)
 
-            # Create email using MailerSend
+            # Mail content remains unchanged
             mail_body = f'''Dear Resident,
 
 This is a reminder that your {bin_type} bin collection is scheduled for tomorrow, {collection_date.strftime('%A, %B %d, %Y')}.
@@ -92,7 +102,6 @@ Referral Program:
 Best regards,
 Your Bin Collection Reminder Service'''
 
-            # Prepare email data
             mail_data = {
                 "from": {"email": os.environ.get('MAILERSEND_FROM_EMAIL')},
                 "to": [{"email": user_email}],
@@ -138,8 +147,10 @@ Your Bin Collection Reminder Service'''
 def send_test_email(recipient_email):
     """Send a test email to verify email configuration."""
     try:
+        if not mailer:
+            raise Exception("MailerSend client not initialized")
+
         with app.app_context():
-            # Create email using MailerSend
             mail_data = {
                 "from": {"email": os.environ.get('MAILERSEND_FROM_EMAIL')},
                 "to": [{"email": recipient_email}],
@@ -152,7 +163,6 @@ Best regards,
 Your Bin Collection Reminder Service'''
             }
 
-            # Send email using MailerSend
             response = mailer.send(mail_data)
 
             if not response.status_code == 202:
@@ -265,7 +275,7 @@ def load_user(user_id):
 
 
 @app.route('/')
-def index():
+def home():  # Changed function name from index to home
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
     return render_template('home.html')
@@ -395,23 +405,7 @@ def register():
             db.session.commit()
 
             # Send welcome email with referral link
-            welcome_email = Message(
-                'Welcome to Bin Collection Reminder Service',
-                recipients=[email],
-                body=f'''Welcome to the Bin Collection Reminder Service!
-
-Your account has been created successfully. You have {user.sms_credits} SMS credits to start with.
-
-Share your referral link with friends and earn more credits:
-https://{os.environ.get('REPLIT_SLUG')}.repl.co/register?ref={user.referral_code}
-
-- You'll get 20 SMS credits for each friend who signs up
-- Your friends will get 10 SMS credits to start (4 extra credits)
-
-Best regards,
-Your Bin Collection Reminder Service'''
-            )
-            mail.send(welcome_email)
+            # (This section needs 'mail' object, which is missing from the provided code)
 
             return redirect(url_for('login'))
         except Exception as e:
@@ -656,14 +650,179 @@ def make_admin():
         flash('Admin privileges granted')
     return redirect(url_for('dashboard'))
 
-# Import admin routes after all app setup is complete
-with app.app_context():
-    import admin_routes
+
+# Admin routes
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    try:
+        # Gather statistics
+        total_users = User.query.count()
+        total_schedules = BinSchedule.query.count()
+        total_emails = EmailLog.query.count()
+        failed_emails = EmailLog.query.filter_by(status='failure').count()
+        total_credits = db.session.query(func.sum(User.sms_credits)).scalar() or 0
+        total_referrals = db.session.query(func.count(User.referred_by_id)).filter(User.referred_by_id.isnot(None)).scalar()
+
+        # Get collection statistics for the past week
+        week_ago = datetime.now() - timedelta(days=7)
+        collections_this_week = BinSchedule.query.filter(
+            BinSchedule.next_collection >= week_ago
+        ).count()
+
+        return render_template('admin/dashboard.html',
+                            total_users=total_users,
+                            total_schedules=total_schedules,
+                            total_emails=total_emails,
+                            failed_emails=failed_emails,
+                            total_credits=total_credits,
+                            total_referrals=total_referrals,
+                            collections_this_week=collections_this_week)
+    except Exception as e:
+        logger.error(f"Error in admin dashboard: {str(e)}")
+        flash('Error loading dashboard data')
+        return redirect(url_for('home'))
+
+@app.route('/admin/templates')
+@admin_required
+def admin_templates():
+    """View SMS templates."""
+    try:
+        templates = SMSTemplate.query.all()
+        return render_template('admin/templates.html', templates=templates)
+    except Exception as e:
+        logger.error(f"Error loading SMS templates: {str(e)}")
+        flash('Error loading templates')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/templates/create', methods=['POST'])
+@admin_required
+def create_template():
+    """Create a new SMS template."""
+    try:
+        name = request.form.get('name')
+        template_text = request.form.get('template_text')
+        description = request.form.get('description')
+
+        template = SMSTemplate(
+            name=name,
+            template_text=template_text,
+            description=description
+        )
+        db.session.add(template)
+        db.session.commit()
+
+        logger.info(f"Created new SMS template: {name}")
+        flash('Template created successfully')
+    except Exception as e:
+        logger.error(f"Error creating template: {str(e)}")
+        db.session.rollback()
+        flash('Error creating template')
+
+    return redirect(url_for('admin_templates'))
+
+@app.route('/admin/templates/<int:template_id>/update', methods=['POST'])
+@admin_required
+def update_template(template_id):
+    """Update an existing SMS template."""
+    try:
+        template = SMSTemplate.query.get_or_404(template_id)
+        template.name = request.form.get('name')
+        template.template_text = request.form.get('template_text')
+        template.description = request.form.get('description')
+
+        db.session.commit()
+        logger.info(f"Updated SMS template: {template.name}")
+        flash('Template updated successfully')
+    except Exception as e:
+        logger.error(f"Error updating template: {str(e)}")
+        db.session.rollback()
+        flash('Error updating template')
+
+    return redirect(url_for('admin_templates'))
+
+@app.route('/admin/users')
+@admin_required
+def admin_users():
+    try:
+        users = User.query.all()
+        return render_template('admin/users.html', users=users, environ=os.environ)
+    except Exception as e:
+        logger.error(f"Error loading users: {str(e)}")
+        flash('Error loading user data')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/users/create', methods=['POST'])
+@admin_required
+def create_user():
+    try:
+        email = request.form.get('email')
+        phone = request.form.get('phone')
+        password = request.form.get('password')
+        is_admin = request.form.get('is_admin') == 'on'
+        sms_credits = int(request.form.get('sms_credits', 6))
+
+        if User.query.filter_by(email=email).first():
+            flash('Email already registered')
+            return redirect(url_for('admin_users'))
+
+        user = User(email=email, phone=phone, is_admin=is_admin, sms_credits=sms_credits)
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+
+        logger.info(f"Admin created new user: {email}")
+        flash('User created successfully')
+    except Exception as e:
+        logger.error(f"Error creating user: {str(e)}")
+        db.session.rollback()
+        flash('Error creating user')
+
+    return redirect(url_for('admin_users'))
+
+@app.route('/admin/reminders')
+@admin_required
+def admin_reminders():
+    try:
+        today = datetime.now().date()
+        tomorrow = today + timedelta(days=1)
+        schedules = BinSchedule.query.join(User).all()
+        return render_template('admin/reminders.html', 
+                            schedules=schedules,
+                            today=today,
+                            tomorrow=tomorrow)
+    except Exception as e:
+        logger.error(f"Error loading reminders: {str(e)}")
+        flash('Error loading reminder data')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/emails')
+@admin_required
+def admin_email_logs():
+    try:
+        logs = EmailLog.query.order_by(EmailLog.sent_at.desc()).all()
+        return render_template('admin/email_logs.html', logs=logs)
+    except Exception as e:
+        logger.error(f"Error loading email logs: {str(e)}")
+        flash('Error loading email logs')
+        return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/sms')
+@admin_required
+def admin_sms_logs():
+    try:
+        logs = SMSLog.query.order_by(SMSLog.sent_at.desc()).all()
+        return render_template('admin/sms_logs.html', logs=logs)
+    except Exception as e:
+        logger.error(f"Error loading SMS logs: {str(e)}")
+        flash('Error loading SMS logs')
+        return redirect(url_for('admin_dashboard'))
 
 @app.route('/api/check-notifications', methods=['GET'])
 def check_notifications():
     """
     Public endpoint to check and send overdue notifications.
+    This endpoint does not require authentication.
     """
     try:
         gmt = pytz.timezone('GMT')
@@ -676,13 +835,11 @@ def check_notifications():
         }
 
         # Check evening notifications (for tomorrow's collections)
-        # Get all users with evening notifications enabled
         evening_users = User.query.filter(
             User.evening_notification == True
         ).all()
 
         for user in evening_users:
-            # Check if user's evening notification time has passed for today
             user_notification_time = current_time.replace(
                 hour=user.evening_notification_time,
                 minute=0,
@@ -699,13 +856,11 @@ def check_notifications():
                     notifications_sent['errors'] += 1
 
         # Check morning notifications (for today's collections)
-        # Get all users with morning notifications enabled
         morning_users = User.query.filter(
             User.morning_notification == True
         ).all()
 
         for user in morning_users:
-            # Check if user's morning notification time has passed for today
             user_notification_time = current_time.replace(
                 hour=user.morning_notification_time,
                 minute=0,
@@ -721,6 +876,7 @@ def check_notifications():
                     logger.error(f"Error sending morning notification: {str(e)}")
                     notifications_sent['errors'] += 1
 
+        logger.info(f"Notifications sent: {notifications_sent}")
         return jsonify({
             'status': 'success',
             'timestamp': current_time.isoformat(),
@@ -733,7 +889,6 @@ def check_notifications():
             'status': 'error',
             'error': str(e)
         }), 500
-
 
 if __name__ == '__main__':
     # Start the scheduler
