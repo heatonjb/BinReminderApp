@@ -858,6 +858,7 @@ def check_notifications():
         ).all()
 
         for user in evening_users:
+            # Get user's notification time in GMT
             user_notification_time = current_time.replace(
                 hour=user.evening_notification_time,
                 minute=0,
@@ -867,6 +868,7 @@ def check_notifications():
 
             if current_time > user_notification_time:
                 try:
+                    # Check collections and send notifications
                     check_upcoming_collections('evening')
                     notifications_sent['evening'] += 1
                 except Exception as e:
@@ -879,6 +881,7 @@ def check_notifications():
         ).all()
 
         for user in morning_users:
+            # Get user's notification time in GMT
             user_notification_time = current_time.replace(
                 hour=user.morning_notification_time,
                 minute=0,
@@ -906,6 +909,54 @@ def check_notifications():
             'status': 'error',
             'error': str(e)
         }), 500
+
+# Admin routes
+@app.route('/admin/test-email', methods=['POST'])
+@admin_required
+def admin_test_email():
+    """Admin route to test email functionality."""
+    try:
+        test_email = request.form.get('test_email')
+        if not test_email:
+            flash('Please provide an email address')
+            return redirect(url_for('admin_dashboard'))
+
+        if send_test_email(test_email):
+            flash('Test email sent successfully! Please check the inbox.')
+        else:
+            flash('Failed to send test email. Please check the server logs.')
+
+    except Exception as e:
+        logger.error(f"Error in admin test email: {str(e)}")
+        flash('Error sending test email')
+
+    return redirect(url_for('admin_dashboard'))
+
+@app.route('/admin/test-sms', methods=['POST'])
+@admin_required
+def admin_test_sms():
+    """Admin route to test SMS functionality."""
+    try:
+        test_phone = request.form.get('test_phone')
+        if not test_phone:
+            flash('Please provide a phone number')
+            return redirect(url_for('admin_dashboard'))
+
+        # Validate phone number
+        if not validate_phone(test_phone):
+            flash('Invalid phone number format. Please use a valid format (e.g., +1234567890)')
+            return redirect(url_for('admin_dashboard'))
+
+        if send_test_sms(test_phone, current_user):
+            flash('Test SMS sent successfully! Please check the phone.')
+        else:
+            flash('Failed to send test SMS. Please check the server logs.')
+
+    except Exception as e:
+        logger.error(f"Error in admin test SMS: {str(e)}")
+        flash('Error sending test SMS')
+
+    return redirect(url_for('admin_dashboard'))
 
 if __name__ == '__main__':
     # Start the scheduler

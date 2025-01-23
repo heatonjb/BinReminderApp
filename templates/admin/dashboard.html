@@ -52,5 +52,35 @@
             </div>
         </div>
     </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Test Notifications</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col text-center">
+                        <h6>Test Email</h6>
+                        <form method="POST" action="{{ url_for('admin_test_email') }}">
+                            <div class="mb-3">
+                                <input type="email" name="test_email" class="form-control" placeholder="Enter email address" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Send Test Email</button>
+                        </form>
+                    </div>
+                    <div class="col text-center">
+                        <h6>Test SMS</h6>
+                        <form method="POST" action="{{ url_for('admin_test_sms') }}">
+                            <div class="mb-3">
+                                <input type="tel" name="test_phone" class="form-control" placeholder="Enter phone number" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Send Test SMS</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
